@@ -19,8 +19,13 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Docker directory itself
-docker/
+# Docker compose/env (not needed inside image)
+docker/docker-compose.yml
+docker/.env*
+docker/Dockerfile
+
+# macOS resource forks
+._*
 
 # Windows scripts and docs
 *.bat
