@@ -1,0 +1,29 @@
+# Database files
+*.db
+*.db-wal
+*.db-shm
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+env/
+venv/
+.venv/
+
+# Environment secrets
+.env
+
+# Logs
+logs/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+nul
+
+# Claude
+.claude/

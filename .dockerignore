@@ -1,0 +1,31 @@
+# Database files
+*.db
+*.db-wal
+*.db-shm
+
+# Python virtualenv
+env/
+venv/
+.venv/
+
+# Environment secrets
+.env
+
+# Logs (mounted as volume)
+logs/
+
+# Caches
+__pycache__/
+*.pyc
+*.pyo
+
+# Docker directory itself
+docker/
+
+# Windows scripts and docs
+*.bat
+*.md
+
+# Misc
+nul
+.claude/

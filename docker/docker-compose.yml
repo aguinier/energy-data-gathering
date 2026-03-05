@@ -1,0 +1,15 @@
+services:
+  data-gathering:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: energy-data-gathering
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      - ENERGY_DB_PATH=/data/energy_dashboard.db
+      - ENERGY_LOGS_DIR=/app/logs
+    volumes:
+      - ${DB_DIR:-..}:/data        # directory containing the DB (SQLite needs WAL/SHM siblings)
+      - ../logs:/app/logs          # persistent logs on host

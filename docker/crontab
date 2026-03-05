@@ -1,0 +1,8 @@
+# Energy data updates (4x daily)
+30 0 * * * cd /app && /usr/local/bin/python3 scripts/update.py >> /app/logs/cron_update.log 2>&1
+30 6 * * * cd /app && /usr/local/bin/python3 scripts/update.py >> /app/logs/cron_update.log 2>&1
+30 13 * * * cd /app && /usr/local/bin/python3 scripts/update.py >> /app/logs/cron_update.log 2>&1
+30 18 * * * cd /app && /usr/local/bin/python3 scripts/update.py >> /app/logs/cron_update.log 2>&1
+
+# Weather data + forecasts (daily at 15:00 UTC)
+0 15 * * * cd /app && /usr/local/bin/python3 scripts/update_weather.py --forecast >> /app/logs/cron_weather.log 2>&1

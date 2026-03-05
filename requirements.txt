@@ -1,0 +1,35 @@
+# ENTSO-E Energy Data Pipeline Dependencies
+
+# ENTSO-E API Client
+entsoe-py>=0.7.8
+
+# Data Processing
+pandas==2.2.0
+numpy==1.26.3
+
+# Database
+# SQLite is built into Python, no additional package needed
+
+# Environment Variables
+python-dotenv==1.0.0
+
+# HTTP Requests (used by entsoe-py)
+requests==2.31.0
+
+# Timezone Handling
+pytz==2024.1
+
+# Date/Time Utilities
+python-dateutil==2.8.2
+
+# Scheduling (for cron alternative if needed)
+schedule==1.2.0
+
+# Logging
+# Built into Python, no additional package needed
+
+# Retry Logic
+tenacity==8.2.3
+
+# Progress Bars (optional, for backfill visibility)
+tqdm==4.66.1
