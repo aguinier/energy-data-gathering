@@ -13,8 +13,8 @@ load_dotenv()
 # PATHS
 # ============================================================================
 BASE_DIR = Path(__file__).parent
-DATABASE_PATH = BASE_DIR / "energy_dashboard.db"
-LOGS_DIR = BASE_DIR / "logs"
+DATABASE_PATH = Path(os.getenv("ENERGY_DB_PATH", str(BASE_DIR / "energy_dashboard.db")))
+LOGS_DIR = Path(os.getenv("ENERGY_LOGS_DIR", str(BASE_DIR / "logs")))
 
 # ============================================================================
 # API CONFIGURATION
