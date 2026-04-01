@@ -28,6 +28,8 @@ VALID_TABLES = frozenset(
         "energy_generation_forecast",
         "forecasts",
         "countries",
+        "crossborder_flows",
+        "net_position",
     }
 )
 
@@ -150,6 +152,68 @@ def get_country_by_code(country_code: str) -> Optional[Dict]:
             }
 
     return None
+
+
+# ============================================================================
+# TABLE CREATION (CROSSBORDER FLOWS & NET POSITION)
+# ============================================================================
+
+
+def create_crossborder_flows_table():
+    """Create crossborder_flows table for bilateral physical flow data."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS crossborder_flows (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                country_from TEXT NOT NULL,
+                country_to TEXT NOT NULL,
+                timestamp_utc TEXT NOT NULL,
+                flow_mw REAL NOT NULL,
+                data_quality TEXT DEFAULT 'actual',
+                publication_timestamp_utc TEXT,
+                fetched_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(country_from, country_to, timestamp_utc)
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_cbf_from
+            ON crossborder_flows(country_from, timestamp_utc)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_cbf_to
+            ON crossborder_flows(country_to, timestamp_utc)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_cbf_pair
+            ON crossborder_flows(country_from, country_to, timestamp_utc)
+        """)
+        conn.commit()
+    logger.info("crossborder_flows table created/verified")
+
+
+def create_net_position_table():
+    """Create net_position table for aggregated net position data."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS net_position (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                country_code TEXT NOT NULL,
+                timestamp_utc TEXT NOT NULL,
+                net_position_mw REAL NOT NULL,
+                data_quality TEXT DEFAULT 'actual',
+                publication_timestamp_utc TEXT,
+                fetched_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(country_code, timestamp_utc)
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_np_lookup
+            ON net_position(country_code, timestamp_utc)
+        """)
+        conn.commit()
+    logger.info("net_position table created/verified")
 
 
 # ============================================================================
@@ -721,6 +785,95 @@ def upsert_weather_forecast_data(
     logger.info(
         f"Upserted {records_affected} weather forecast records for {country_code} (run: {forecast_run_time_str})"
     )
+    return records_affected, 0
+
+
+def upsert_crossborder_flows(
+    df: pd.DataFrame,
+    country_from: str,
+) -> Tuple[int, int]:
+    """
+    Insert or update cross-border flow data.
+
+    Args:
+        df: DataFrame with columns: country_to, timestamp_utc, flow_mw
+        country_from: ISO 2-letter country code (exporting country)
+
+    Returns:
+        Tuple of (records_affected, 0)
+    """
+    if df.empty:
+        logger.warning(f"Empty DataFrame for crossborder flows from {country_from}")
+        return 0, 0
+
+    records_affected = 0
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+
+        for _, row in df.iterrows():
+            ts_str = utils.format_timestamp_for_db(row["timestamp_utc"]) if pd.notna(row["timestamp_utc"]) else None
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO crossborder_flows
+                (country_from, country_to, timestamp_utc, flow_mw,
+                 data_quality, fetched_at)
+                VALUES (?, ?, ?, ?, 'actual', CURRENT_TIMESTAMP)
+                """,
+                (
+                    country_from,
+                    row["country_to"],
+                    ts_str,
+                    float(row["flow_mw"]) if pd.notna(row["flow_mw"]) else None,
+                ),
+            )
+            records_affected += cursor.rowcount
+
+    logger.info(f"Upserted {records_affected} crossborder flow records from {country_from}")
+    return records_affected, 0
+
+
+def upsert_net_position(
+    df: pd.DataFrame,
+    country_code: str,
+) -> Tuple[int, int]:
+    """
+    Insert or update net position data.
+
+    Args:
+        df: DataFrame with columns: timestamp_utc, net_position_mw
+        country_code: ISO 2-letter country code
+
+    Returns:
+        Tuple of (records_affected, 0)
+    """
+    if df.empty:
+        logger.warning(f"Empty DataFrame for net position, country {country_code}")
+        return 0, 0
+
+    records_affected = 0
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+
+        for _, row in df.iterrows():
+            ts_str = utils.format_timestamp_for_db(row["timestamp_utc"]) if pd.notna(row["timestamp_utc"]) else None
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO net_position
+                (country_code, timestamp_utc, net_position_mw,
+                 data_quality, fetched_at)
+                VALUES (?, ?, ?, 'actual', CURRENT_TIMESTAMP)
+                """,
+                (
+                    country_code,
+                    ts_str,
+                    float(row["net_position_mw"]) if pd.notna(row["net_position_mw"]) else None,
+                ),
+            )
+            records_affected += cursor.rowcount
+
+    logger.info(f"Upserted {records_affected} net position records for {country_code}")
     return records_affected, 0
 
 
