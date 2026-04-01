@@ -51,6 +51,18 @@ def normalize_zone_to_country(zone_name: str) -> str:
     return zone_name
 
 
+# Reverse mapping: country code → entsoe-py NEIGHBOURS keys
+# For countries with multiple bidding zones, we query each zone separately
+# and combine results. For single-zone countries, the key equals the code.
+COUNTRY_TO_NEIGHBOURS_KEYS = {
+    "DE": ["DE_AT_LU"],   # DE_LU is a subset; DE_AT_LU covers main borders
+    "DK": ["DK_1", "DK_2"],
+    "NO": ["NO_1", "NO_2", "NO_3", "NO_4", "NO_5"],
+    "SE": ["SE_1", "SE_2", "SE_3", "SE_4"],
+    "IE": ["IE_SEM"],
+}
+
+
 # ============================================================================
 # CUSTOM EXCEPTIONS
 # ============================================================================
@@ -1137,8 +1149,9 @@ class ENTSOEClient:
         """
         Query all cross-border physical flows for a country.
 
-        Uses entsoe-py's query_physical_crossborder_allborders which
-        internally queries each neighbor and returns a wide DataFrame.
+        Queries each neighbor individually using query_crossborder_flows()
+        with the country's 2-letter code. Uses NEIGHBOURS mapping to find
+        which borders exist, but always uses the 2-letter code for API calls.
 
         Args:
             country_code: ISO 2-letter country code
@@ -1147,21 +1160,53 @@ class ENTSOEClient:
             export: True for exports from country, False for imports
 
         Returns:
-            DataFrame with columns = neighbor zone names + 'sum',
+            DataFrame with columns = neighbor zone names,
             index = timestamps. None if no data.
         """
+        from entsoe.mappings import NEIGHBOURS
+
         try:
             start_ts = pd.Timestamp(start, tz="UTC")
             end_ts = pd.Timestamp(end, tz="UTC")
 
-            self._rate_limit()
-            df = self.client.query_physical_crossborder_allborders(
-                country_code, start=start_ts, end=end_ts, export=export
-            )
+            # Find all neighbors via NEIGHBOURS mapping
+            # For multi-zone countries, collect neighbors from all zones
+            zone_keys = COUNTRY_TO_NEIGHBOURS_KEYS.get(country_code, [country_code])
+            all_neighbors = set()
+            for zone_key in zone_keys:
+                if zone_key in NEIGHBOURS:
+                    all_neighbors.update(NEIGHBOURS[zone_key])
 
-            if df is None or df.empty:
+            if not all_neighbors:
+                logger.warning(f"No neighbors found for {country_code}")
+                return None
+
+            # Query each border individually using 2-letter codes
+            series_dict = {}
+            for neighbor in sorted(all_neighbors):
+                try:
+                    self._rate_limit()
+                    if export:
+                        series = self.client.query_crossborder_flows(
+                            country_code, neighbor, start=start_ts, end=end_ts
+                        )
+                    else:
+                        series = self.client.query_crossborder_flows(
+                            neighbor, country_code, start=start_ts, end=end_ts
+                        )
+                    if series is not None and not series.empty:
+                        series_dict[neighbor] = series
+                except Exception as e:
+                    if "No matching data" in str(e) or "NoMatchingDataError" in type(e).__name__:
+                        logger.debug(f"No flow data {country_code}->{neighbor}: {e}")
+                    else:
+                        logger.debug(f"Error querying {country_code}->{neighbor}: {e}")
+
+            if not series_dict:
                 logger.warning(f"No crossborder flow data for {country_code}")
                 return None
+
+            df = pd.DataFrame(series_dict)
 
             logger.info(
                 f"Retrieved crossborder flows for {country_code} "
