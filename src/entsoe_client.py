@@ -26,6 +26,31 @@ import utils
 logger = logging.getLogger('entsoe_pipeline')
 
 
+# Bidding zone to country code mapping for multi-zone countries
+BIDDING_ZONE_TO_COUNTRY = {
+    "DE_AT_LU": "DE", "DE_LU": "DE",
+    "IT_NORD": "IT", "IT_CNOR": "IT", "IT_CSUD": "IT", "IT_SUD": "IT",
+    "IT_SARD": "IT", "IT_SICI": "IT", "IT_NORD_AT": "IT",
+    "IT_NORD_FR": "IT", "IT_NORD_SI": "IT", "IT_NORD_CH": "IT",
+    "IT_BRNN": "IT", "IT_FOGN": "IT", "IT_GR": "IT",
+    "IT_PRGP": "IT", "IT_ROSN": "IT", "IT_CALA": "IT",
+    "DK_1": "DK", "DK_2": "DK",
+    "SE_1": "SE", "SE_2": "SE", "SE_3": "SE", "SE_4": "SE",
+    "NO_1": "NO", "NO_2": "NO", "NO_3": "NO", "NO_4": "NO", "NO_5": "NO",
+    "GB": "GB", "GB_NIR": "GB",
+    "IE_SEM": "IE",
+}
+
+
+def normalize_zone_to_country(zone_name: str) -> str:
+    """Map an entsoe-py bidding zone name to a 2-letter country code."""
+    if zone_name in BIDDING_ZONE_TO_COUNTRY:
+        return BIDDING_ZONE_TO_COUNTRY[zone_name]
+    if len(zone_name) == 2 and zone_name.isalpha():
+        return zone_name
+    return zone_name
+
+
 # ============================================================================
 # CUSTOM EXCEPTIONS
 # ============================================================================
@@ -1097,6 +1122,100 @@ class ENTSOEClient:
         result = result.groupby('timestamp_utc').sum().reset_index()
 
         return result
+
+    # ========================================================================
+    # CROSS-BORDER FLOWS & NET POSITION
+    # ========================================================================
+
+    def query_crossborder_all(
+        self,
+        country_code: str,
+        start: datetime,
+        end: datetime,
+        export: bool = True,
+    ) -> Optional[pd.DataFrame]:
+        """
+        Query all cross-border physical flows for a country.
+
+        Uses entsoe-py's query_physical_crossborder_allborders which
+        internally queries each neighbor and returns a wide DataFrame.
+
+        Args:
+            country_code: ISO 2-letter country code
+            start: Start datetime (UTC)
+            end: End datetime (UTC)
+            export: True for exports from country, False for imports
+
+        Returns:
+            DataFrame with columns = neighbor zone names + 'sum',
+            index = timestamps. None if no data.
+        """
+        try:
+            start_ts = pd.Timestamp(start, tz="UTC")
+            end_ts = pd.Timestamp(end, tz="UTC")
+
+            self._rate_limit()
+            df = self.client.query_physical_crossborder_allborders(
+                country_code, start=start_ts, end=end_ts, export=export
+            )
+
+            if df is None or df.empty:
+                logger.warning(f"No crossborder flow data for {country_code}")
+                return None
+
+            logger.info(
+                f"Retrieved crossborder flows for {country_code} "
+                f"({'export' if export else 'import'}): "
+                f"{len(df)} rows, {len(df.columns)} borders"
+            )
+            return df
+
+        except Exception as e:
+            if "No matching data" in str(e) or "NoMatchingDataError" in type(e).__name__:
+                logger.warning(f"No crossborder data for {country_code}: {e}")
+                return None
+            raise
+
+    def query_net_position_data(
+        self,
+        country_code: str,
+        start: datetime,
+        end: datetime,
+        dayahead: bool = True,
+    ) -> Optional[pd.Series]:
+        """
+        Query realized net position for a country.
+
+        Args:
+            country_code: ISO 2-letter country code
+            start: Start datetime (UTC)
+            end: End datetime (UTC)
+            dayahead: True for day-ahead, False for intraday
+
+        Returns:
+            pd.Series with timestamp index and MW values. None if no data.
+        """
+        try:
+            start_ts = pd.Timestamp(start, tz="UTC")
+            end_ts = pd.Timestamp(end, tz="UTC")
+
+            self._rate_limit()
+            series = self.client.query_net_position(
+                country_code, start=start_ts, end=end_ts, dayahead=dayahead
+            )
+
+            if series is None or series.empty:
+                logger.warning(f"No net position data for {country_code}")
+                return None
+
+            logger.info(f"Retrieved {len(series)} net position records for {country_code}")
+            return series
+
+        except Exception as e:
+            if "No matching data" in str(e) or "NoMatchingDataError" in type(e).__name__:
+                logger.warning(f"No net position data for {country_code}: {e}")
+                return None
+            raise
 
     # ========================================================================
     # HELPER METHODS
