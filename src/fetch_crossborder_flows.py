@@ -12,8 +12,9 @@ from typing import Tuple, Optional
 
 import pandas as pd
 
-from src import db, utils
-from src.entsoe_client import ENTSOEClient, normalize_zone_to_country
+from . import db
+import utils
+from .entsoe_client import ENTSOEClient, normalize_zone_to_country
 
 logger = logging.getLogger("energy_data_gathering.fetch_crossborder_flows")
 

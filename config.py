@@ -113,7 +113,25 @@ ENTSOE_API_CONFIG = {
         'description': 'Day-ahead wind and solar generation forecasts',
         'is_dayahead': True,  # Flag to indicate this data type supports D+1 fetching
         'forecast_columns': ['solar_mw', 'wind_onshore_mw', 'wind_offshore_mw']
-    }
+    },
+    'crossborder_flows': {
+        'name': 'Cross-Border Physical Flows',
+        'document_type': 'A11',
+        'process_type': None,
+        'table': 'crossborder_flows',
+        'value_column': 'flow_mw',
+        'entsoe_method': 'query_physical_crossborder_allborders',
+        'description': 'Physical electricity flows between interconnected countries (MW)',
+    },
+    'net_position': {
+        'name': 'Realized Net Position',
+        'document_type': 'A25',
+        'process_type': None,
+        'table': 'net_position',
+        'value_column': 'net_position_mw',
+        'entsoe_method': 'query_net_position',
+        'description': 'Aggregated import/export balance per country (MW). Positive = exporter.',
+    },
 }
 
 # ============================================================================
@@ -127,7 +145,9 @@ BACKFILL_DEFAULTS = {
     'renewable': '2021-01-01', # 4 years
     'load_forecast_day_ahead': '2019-01-01',  # Match load actual data
     'load_forecast_week_ahead': '2019-01-01',  # Match load actual data
-    'wind_solar_forecast': '2021-01-01'  # Match renewable data range
+    'wind_solar_forecast': '2021-01-01',  # Match renewable data range
+    'crossborder_flows': '2023-01-01',
+    'net_position': '2023-01-01',
 }
 
 # ============================================================================

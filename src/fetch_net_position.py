@@ -11,8 +11,9 @@ from typing import Tuple, Optional
 
 import pandas as pd
 
-from src import db, utils
-from src.entsoe_client import ENTSOEClient
+from . import db
+import utils
+from .entsoe_client import ENTSOEClient
 
 logger = logging.getLogger("energy_data_gathering.fetch_net_position")
 

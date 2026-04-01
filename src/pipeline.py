@@ -17,6 +17,7 @@ import utils
 from . import db
 from .entsoe_client import ENTSOEClient
 from . import fetch_load, fetch_price, fetch_renewable, fetch_load_forecast, fetch_wind_solar_forecast
+from . import fetch_crossborder_flows, fetch_net_position
 
 
 logger = logging.getLogger('entsoe_pipeline')
@@ -302,6 +303,14 @@ class ENTSOEPipeline:
                 )
             elif data_type == 'wind_solar_forecast':
                 inserted, updated, failed = fetch_wind_solar_forecast.fetch_wind_solar_forecast_data(
+                    self.client, country_code, start, end
+                )
+            elif data_type == 'crossborder_flows':
+                inserted, updated, failed = fetch_crossborder_flows.fetch_crossborder_flows_data(
+                    self.client, country_code, start, end
+                )
+            elif data_type == 'net_position':
+                inserted, updated, failed = fetch_net_position.fetch_net_position_data(
                     self.client, country_code, start, end
                 )
             else:
