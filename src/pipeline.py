@@ -280,6 +280,7 @@ class ENTSOEPipeline:
         Returns:
             True if successful, False otherwise
         """
+        log_id = db.log_ingestion_start(data_type, country_code)
         try:
             if data_type == 'load':
                 inserted, updated, failed = fetch_load.fetch_load_data(
@@ -314,16 +315,26 @@ class ENTSOEPipeline:
                     self.client, country_code, start, end
                 )
             else:
-                logger.error(f"Unknown data type: {data_type}")
+                msg = f"Unknown data type: {data_type}"
+                logger.error(msg)
+                db.log_ingestion_complete(log_id, records_failed=1, error_message=msg)
                 return False
 
             # Update total records
             self.stats['total_records'] += inserted
 
+            db.log_ingestion_complete(
+                log_id,
+                records_inserted=inserted,
+                records_updated=updated,
+                records_failed=failed,
+            )
+
             return failed == 0
 
         except Exception as e:
             logger.error(f"Error fetching {data_type} data for {country_code}: {e}")
+            db.log_ingestion_complete(log_id, records_failed=1, error_message=str(e))
             return False
 
     def _print_summary(self):
