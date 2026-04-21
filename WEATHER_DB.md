@@ -23,53 +23,61 @@ After: one table, `weather_observation`, keyed by
 a new row even for the same target hour, so replay queries (what did
 we know at 07:45 UTC last Tuesday?) are exact.
 
-## Topology
+## Topology — single fetcher, many readers
 
 ```
-                   heliocast (Windows workstation)
-                       runner.py :45 UTC
-                             │
-                             │ POST /api/weather/snapshot
-                             │ Bearer HELIO_WRITE_TOKEN
-                             ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  QuietlyConfident   (prod, 192.168.86.36)                       │
-│                                                                  │
-│   energy-data-gathering              energy-dashboard-frontend  │
-│    cron (Docker):                      express server :3001     │
-│      00:30, 06:30, 13:30, 18:30 UTC     GET  /api/*    (RO)     │
-│        → update.py (energy)             POST /api/weather/      │
-│      15:00 UTC                                snapshot  (RW)    │
-│        → update_weather.py (legacy)                             │
-│      07:00, 13:30, 19:30 UTC                                    │
-│        → update_weather_observation.py                          │
-│                                                                  │
-│         │                                       │               │
-│         ▼                                       ▼               │
-│   ┌─────────────────────────────────────────────────┐           │
-│   │  energy_dashboard.db  (~3.2 GB, WAL mode)       │           │
-│   │    existing tables: energy_load, price,         │           │
-│   │                     renewable, weather_data, ...│           │
-│   │    NEW (Apr 2026):                              │           │
-│   │      weather_location   (dim: country × zone)   │           │
-│   │      weather_source     (dim: provider × model) │           │
-│   │      weather_observation (fact, fetched_at PK)  │           │
-│   └─────────────┬───────────────────────────────────┘           │
-│                 │ sqlite3.backup() + scp                        │
-└─────────────────┼────────────────────────────────────────────────┘
-                  │ 07:00 local daily (workstation pull)
-                  ▼
-      C:\Code\able\data\energy_dashboard.db   (read-only replica)
-                  │
-                  │ SELECT
-                  ▼
-      helio notebooks · realistic_backtest.py · dashboards
+                          Open-Meteo API
+                               │
+                               │ (THE ONLY outbound fetch path)
+                               ▼
+┌────────────────────────────────────────────────────────────────────┐
+│  QuietlyConfident   (prod, 192.168.86.36)                          │
+│                                                                     │
+│   energy-data-gathering                energy-dashboard-frontend   │
+│    cron (Docker):                        express server :3001       │
+│                                                                     │
+│      00:30, 06:30, 13:30, 18:30 UTC      GET  /api/*        (RO)   │
+│        → update.py (energy)              GET  /api/weather/latest  │
+│                                                    (RO, public)    │
+│      15:00 UTC                                                      │
+│        → update_weather.py (legacy)      POST /api/weather/snapshot│
+│                                                    (RW, token-auth,│
+│      XX:30 UTC  (HOURLY — NEW)                     kept for back-  │
+│        → update_weather_observation_                compat; will   │
+│          hourly.py  (4 NWP, realtime)              be removed)     │
+│                                                                     │
+│      07:00, 13:30, 19:30 UTC                                        │
+│        → update_weather_observation.py                              │
+│          (Previous Runs day1+day3 archive)                          │
+│                                                                     │
+│         │                                      │                    │
+│         ▼                                      ▼                    │
+│   ┌─────────────────────────────────────────────────┐              │
+│   │  energy_dashboard.db  (~3.2 GB, WAL mode)       │              │
+│   │    weather_location / weather_source /          │              │
+│   │    weather_observation  (fact, fetched_at PK)   │              │
+│   └─────────────┬──────────────────┬────────────────┘              │
+│                 │                  │                                │
+│                 │                  │  GET /api/weather/latest       │
+│                 │ nightly sqlite   │  (over LAN, port 3001)         │
+│                 │ .backup() + scp  │                                │
+└─────────────────┼──────────────────┼────────────────────────────────┘
+                  │                  │
+                  │ 07:00 local      │ :45 UTC hourly (live)
+                  ▼                  ▼
+       Workstation replica     heliocast runner.py
+       (readonly, ≤ 24h lag)      ├─ fetch_weather_from_db()
+               │                    ├─ features + predict + bias-correct
+               │ SELECT              ├─ submit to Predico
+               ▼                    └─ save forecast/submission sidecars
+       helio research                   (NO local Open-Meteo fetch)
+       notebooks · backtests
 ```
 
-Prod is the single writer. The workstation copy is strictly read-only
-and at most ~24 h stale — fine for backtesting, not for real-time
-inference (heliocast continues to fetch Open-Meteo directly for its
-live forecasts).
+**The single-fetcher rule:** one Docker cron in able hits Open-Meteo.
+Everything else (dashboards, heliocast inference, backtests) reads
+from the DB. The workstation replica is for non-real-time research;
+heliocast reads live from the prod DB over LAN for inference.
 
 ## Schema
 
@@ -136,35 +144,52 @@ CREATE INDEX idx_wx_source_latest
 
 ## Data flows
 
-### A. Prod 3×/day cron ingest
+### A. Hourly real-time ingest (HOT PATH — serves heliocast inference)
 
-`docker/crontab` runs `scripts/update_weather_observation.py` at
-07:00, 13:30, 19:30 UTC (rationale = timed after each NWP publishing
-window: 00Z → available ~06Z, 06Z → ~12Z, 12Z → ~18Z).
+`docker/crontab` runs `scripts/update_weather_observation_hourly.py`
+at `XX:30 UTC` every hour. Pulls the `/v1/forecast` endpoint for
+**all 4 NWP models** (best_match, ecmwf_ifs025, icon_seamless,
+gfs_seamless) × **5 BE locations** (centroid + 4 capacity zones).
+Each pull writes ~360 rows per model × 4 models = ~1.4K rows.
+Wall time < 10 s. Heliocast reads at `XX:45 UTC`, so the freshest
+row is ~15 min old when inference uses it.
 
-Each run fetches, for all 5 BE locations:
+### B. 3×/day heavy ingest (Previous Runs archive for backtesting)
 
-- Real-time forecast (`open_meteo_forecast` / `best_match` / `-1`):
-  past 1 day + next 7 days with the fuller variable set (incl. cloud
-  layers + GTI).
-- Previous Runs day1 × 4 NWP models: rolling past 7 days.
-- Previous Runs day3 × 4 NWP models: rolling past 7 days.
+Same script as before (`update_weather_observation.py`), now focused
+on Previous Runs API. Runs at 07:00, 13:30, 19:30 UTC — timed after
+each NWP publishing window so the 24h/72h lead-time stored runs are
+fresh. Fetches for all 4 NWP models × {day1, day3} × 5 locations,
+past 7 days rolling.
 
-Total per tick: ~9 Open-Meteo API calls, ~1.2K rows inserted.
-Professional plan headroom is massive (600K calls/day; we use ~30/day).
+Also runs the real-time forecast for all 4 models (same as Phase A)
+so the 3×/day slots double-confirm the hourly ingest.
 
-### B. Heliocast hourly push
+### C. Heliocast read (pull, not push)
 
-Whenever `HELIO_WEATHER_DB_URL` + `HELIO_WRITE_TOKEN` are set in
-heliocast's `.env`, every `runner.py :45 UTC` invocation POSTs its
-per-submission weather DataFrame to `POST /api/weather/snapshot`.
-Routing: `open_meteo_forecast` / `best_match` / `-1`, zone `central`
-today (will expand to per-zone when runner.py surfaces zone breakdown).
+Every `runner.py :45 UTC` run fetches the current NWP forecast via
+`GET http://192.168.86.36:3001/api/weather/latest` with
+`provider=open_meteo_forecast`, `models=ecmwf_ifs025,icon_seamless,
+gfs_seamless`, `zones=central,north,south,east`. The client
+(`heliocast/src/weather_db_client.py`) reconstructs heliocast's
+original weather-frame shape (15-min interpolated, zone-aggregated,
+best-GHI merged, `ghi_model_std` + per-NWP-model diagnostic columns)
+so downstream feature engineering and the model are unchanged.
 
-The push is best-effort — any error is logged and swallowed so the
-Predico submission path can never fail because of a DB hiccup.
+**Staleness check:** client rejects data older than
+`HELIO_WEATHER_MAX_STALE_MIN` minutes (default 120). On rejection or
+network error, the legacy direct-Open-Meteo path takes over unless
+`HELIO_WEATHER_SOURCE=db-strict`.
 
-### C. One-shot helio-CSV backfill
+### D. Legacy heliocast push (`POST /api/weather/snapshot`)
+
+Still implemented (`heliocast/src/weather_db.py`, Phase 5) and kept
+for back-compat. Now redundant because able's hourly cron covers the
+same data; scheduled for removal once the read path has been running
+stably in prod for a week. Unset `HELIO_WRITE_TOKEN` in heliocast's
+`.env` to disable it already.
+
+### E. One-shot helio-CSV backfill
 
 `scripts/backfill_weather_observation.py` reads helio's
 `weather_nwp_{model}_day{1,3}_zones_*.csv` files and inserts historical
@@ -242,42 +267,42 @@ ORDER BY valid_at;
 ```bash
 ssh clavain@192.168.86.36
 
-# 1. Pull the 3 repos
+# 1. Pull the 2 prod repos
 cd /home/clavain/energy-dashboard/energy-data-gathering && git pull
 cd ../energy-dashboard-frontend && git pull
 
-# 2. Generate + persist the write token
-TOKEN=$(openssl rand -hex 32)
-echo "HELIO_WRITE_TOKEN=$TOKEN" >> /home/clavain/energy-dashboard/.env
-
-# 3. Bring up the data-gathering container (picks up new crontab)
+# 2. Bring up data-gathering (new hourly + 3×/day crons)
 cd ../energy-data-gathering
 docker compose up -d --build data-gathering
 
-# 4. Bootstrap the schema (idempotent)
+# 3. Bootstrap the schema (idempotent — also runs on every cron tick)
 docker compose exec data-gathering python scripts/init_weather_observation.py
 
-# 5. Bring up the frontend with the new write endpoint
+# 4. Warm-start one hourly pull to verify
+docker compose exec data-gathering \
+  python scripts/update_weather_observation_hourly.py
+
+# 5. Bring up the frontend with the new GET /weather/latest endpoint
 cd ../energy-dashboard-frontend
 docker compose up -d --build frontend
 
 # 6. Sanity checks
 curl http://localhost:3001/api/health
-curl -X POST http://localhost:3001/api/weather/snapshot \
-  -H "Authorization: Bearer bad" \
-  -H "Content-Type: application/json" -d '{}'
-# → 401 Unauthorized (good)
+curl "http://localhost:3001/api/weather/latest?country_code=BE&zones=central&provider=open_meteo_forecast&models=best_match&lead_time_hours=-1&valid_from=$(date -u +%FT%TZ)&valid_to=$(date -u -d '+3 hours' +%FT%TZ)" \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print('rows:', sum(len(r['rows']) for r in d['data']['results']))"
 ```
 
 Then on the workstation, add to `C:\Code\heliocast\.env`:
 
 ```
 HELIO_WEATHER_DB_URL=http://192.168.86.36:3001
-HELIO_WRITE_TOKEN=<same token as prod>
+# HELIO_WEATHER_SOURCE=db         # default behaviour
+# HELIO_WEATHER_MAX_STALE_MIN=120 # default
 ```
 
-Next scheduled heliocast :45 UTC run starts pushing. Next 07:00 local
-sync brings new rows to the workstation replica.
+The next heliocast `:45 UTC` run reads weather from the DB. The old
+push token (`HELIO_WRITE_TOKEN`) is **no longer needed** — heliocast
+doesn't push anymore.
 
 ### Daily observations
 
