@@ -7,10 +7,19 @@
 # Weather data + forecasts (daily at 15:00 UTC) — legacy `weather_data` table
 0 15 * * * cd /app && /usr/local/bin/python3 scripts/update_weather.py --forecast >> /app/logs/cron_weather.log 2>&1
 
-# Versioned weather_observation ingest — 3x/day, timed after NWP publishing:
-# - 07:00 UTC: catches 00Z runs (~5-7h lag), ahead of heliocast's 08:00 UTC Predico gate
-# - 13:30 UTC: catches 06Z runs, shares window with 13:30 energy ingest
-# - 19:30 UTC: catches 12Z runs
+# Versioned weather_observation — HOURLY real-time ingest.
+# Pulls /v1/forecast for all 4 NWP models (best_match, ecmwf, icon, gfs)
+# × 5 BE locations at XX:30 UTC. Heliocast's :45 UTC runner reads
+# straight from the DB (via GET /api/weather/latest) so the forecast
+# it uses is ≤ 15 min old.
+30 * * * * cd /app && /usr/local/bin/python3 scripts/update_weather_observation_hourly.py >> /app/logs/cron_weather_obs_hourly.log 2>&1
+
+# Versioned weather_observation — 3×/day heavy ingest.
+# Adds Previous Runs API (day1 + day3 × 4 NWP models) to the realtime
+# pulls. Timed after NWP publishing windows:
+#  07:00 UTC catches 00Z runs (~5-7h lag), ahead of Predico 08:00 gate
+#  13:30 UTC catches 06Z runs (shares window with energy ingest)
+#  19:30 UTC catches 12Z runs
 0  7 * * * cd /app && /usr/local/bin/python3 scripts/update_weather_observation.py >> /app/logs/cron_weather_obs.log 2>&1
 30 13 * * * cd /app && /usr/local/bin/python3 scripts/update_weather_observation.py >> /app/logs/cron_weather_obs.log 2>&1
 30 19 * * * cd /app && /usr/local/bin/python3 scripts/update_weather_observation.py >> /app/logs/cron_weather_obs.log 2>&1

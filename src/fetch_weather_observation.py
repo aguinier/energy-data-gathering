@@ -299,11 +299,16 @@ def _parse_hourly_response(
 # ---------------------------------------------------------------------------
 
 def fetch_realtime_forecast(
+    model_id: str = "best_match",
     forecast_days: int = 7,
     past_days: int = 1,
     fetched_at: Optional[datetime] = None,
 ) -> int:
     """Pull the real-time `/v1/forecast` endpoint for all 5 BE locations.
+
+    ``model_id`` selects the NWP source:
+      - ``"best_match"``  — Open-Meteo's default (no ``models=`` param)
+      - ``"ecmwf_ifs025"``, ``"icon_seamless"``, ``"gfs_seamless"`` — specific
 
     Returns the number of rows inserted.
     """
@@ -312,7 +317,7 @@ def fetch_realtime_forecast(
         logger.warning("No BE locations in weather_location — did you init the schema?")
         return 0
 
-    source_id = _get_source_id("open_meteo_forecast", "best_match", -1)
+    source_id = _get_source_id("open_meteo_forecast", model_id, -1)
     fetched_at_dt = fetched_at or datetime.now(timezone.utc)
     fetched_at_str = fetched_at_dt.isoformat(timespec="seconds")
 
@@ -327,10 +332,12 @@ def fetch_realtime_forecast(
         "tilt": PANEL_TILT,
         "azimuth": PANEL_AZIMUTH,
     }
+    if model_id != "best_match":
+        params["models"] = model_id
 
     data = _call_openmeteo(COMMERCIAL_FORECAST_URL, params)
     if not data:
-        logger.error("fetch_realtime_forecast: no data returned")
+        logger.error("fetch_realtime_forecast(%s): no data returned", model_id)
         return 0
 
     rows = _parse_hourly_response(
@@ -340,10 +347,16 @@ def fetch_realtime_forecast(
     )
     inserted = _upsert_observations(rows, source_id, fetched_at_str)
     logger.info(
-        "fetch_realtime_forecast: %d rows inserted (fetched_at=%s)",
-        inserted, fetched_at_str,
+        "fetch_realtime_forecast(%s): %d rows (fetched_at=%s)",
+        model_id, inserted, fetched_at_str,
     )
     return inserted
+
+
+# NWP models we fetch at real-time (every hour) — matches helio/heliocast
+# NWP_INFERENCE_MODELS. best_match is a no-models merged view, plus the 3
+# individual NWP models so heliocast can compute cross-model disagreement.
+REALTIME_NWP_MODELS = ("best_match", "ecmwf_ifs025", "icon_seamless", "gfs_seamless")
 
 
 def fetch_previous_runs(
@@ -422,13 +435,51 @@ NWP_MODELS = ("best_match", "ecmwf_ifs025", "gfs_seamless", "icon_seamless")
 LEAD_TIMES_HOURS = (24, 72)
 
 
+def run_hourly_realtime_ingest(
+    forecast_days_ahead: int = 3,
+    forecast_past_days: int = 1,
+    fetched_at: Optional[datetime] = None,
+) -> dict:
+    """Hourly cadence: pull the real-time forecast for **all 4 NWP models**.
+
+    Light: only the real-time `/v1/forecast` endpoint, no Previous Runs.
+    Designed to run at :30 UTC each hour so that downstream readers
+    (heliocast at :45 UTC) see ≤ 15 min of staleness.
+
+    Returns per-source row-insert summary.
+    """
+    fetched_at_dt = fetched_at or datetime.now(timezone.utc)
+    summary: dict[str, int] = {}
+
+    for model in REALTIME_NWP_MODELS:
+        key = f"realtime_{model}"
+        try:
+            summary[key] = fetch_realtime_forecast(
+                model_id=model,
+                forecast_days=forecast_days_ahead,
+                past_days=forecast_past_days,
+                fetched_at=fetched_at_dt,
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.exception("realtime_forecast(%s) failed: %s", model, e)
+            summary[key] = -1
+
+    total = sum(v for v in summary.values() if v >= 0)
+    logger.info("hourly realtime ingest complete: %d rows (fetched_at=%s)",
+                total, fetched_at_dt.isoformat(timespec="seconds"))
+    return summary
+
+
 def run_ingest(
     previous_runs_window_days: int = 7,
     forecast_days_ahead: int = 7,
     forecast_past_days: int = 1,
     fetched_at: Optional[datetime] = None,
 ) -> dict:
-    """Full ingest cycle: real-time forecast + Previous Runs × 4 models × 2 leads.
+    """Full ingest cycle: real-time forecast (4 NWP) + Previous Runs (4 × 2).
+
+    Used by the 3×/day slots — pulls the full lot. The lightweight
+    :meth:`run_hourly_realtime_ingest` is the other cadence tick.
 
     Returns a summary dict of rows inserted per source.
     """
@@ -444,16 +495,12 @@ def run_ingest(
 
     summary: dict[str, int] = {}
 
-    # Real-time forecast (captures current forecast for next N days).
-    try:
-        summary["realtime_forecast"] = fetch_realtime_forecast(
-            forecast_days=forecast_days_ahead,
-            past_days=forecast_past_days,
-            fetched_at=fetched_at_dt,
-        )
-    except Exception as e:  # noqa: BLE001
-        logger.exception("realtime_forecast ingest failed: %s", e)
-        summary["realtime_forecast"] = -1
+    # Real-time forecast — all 4 NWP models (same as hourly ingest).
+    summary.update(run_hourly_realtime_ingest(
+        forecast_days_ahead=forecast_days_ahead,
+        forecast_past_days=forecast_past_days,
+        fetched_at=fetched_at_dt,
+    ))
 
     # Previous Runs × 4 models × 2 leads.
     for model in NWP_MODELS:

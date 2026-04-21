@@ -124,7 +124,12 @@ BE_LOCATIONS = [
 OPEN_METEO_SOURCES = [
     # provider,                     model_id,         lead_time_hours, description
     ("open_meteo_archive",          "era5",                        0, "ERA5 reanalysis (historical truth)"),
-    ("open_meteo_forecast",         "best_match",                 -1, "Real-time forecast API, latest run"),
+    # Real-time forecast API (hourly ingest — serves heliocast's inference).
+    ("open_meteo_forecast",         "best_match",                 -1, "Real-time forecast API, Open-Meteo best_match"),
+    ("open_meteo_forecast",         "ecmwf_ifs025",               -1, "Real-time forecast API, ECMWF IFS 0.25°"),
+    ("open_meteo_forecast",         "icon_seamless",              -1, "Real-time forecast API, DWD ICON-EU 11 km"),
+    ("open_meteo_forecast",         "gfs_seamless",               -1, "Real-time forecast API, NOAA GFS 0.11°"),
+    # Previous Runs archive (3×/day ingest — replay + backtest substrate).
     ("open_meteo_previous_runs",    "best_match",                 24, "Previous Runs API, day1 lead"),
     ("open_meteo_previous_runs",    "best_match",                 72, "Previous Runs API, day3 lead"),
     ("open_meteo_previous_runs",    "ecmwf_ifs025",               24, "ECMWF IFS 0.25°, day1 lead"),
