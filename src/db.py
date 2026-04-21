@@ -30,6 +30,9 @@ VALID_TABLES = frozenset(
         "countries",
         "crossborder_flows",
         "net_position",
+        "weather_observation",
+        "weather_location",
+        "weather_source",
     }
 )
 
@@ -214,6 +217,62 @@ def create_net_position_table():
         """)
         conn.commit()
     logger.info("net_position table created/verified")
+
+
+def create_weather_observation_tables():
+    """Create the versioned weather observation tables + seed dimensions.
+
+    Tables:
+        - weather_location: dimension (country × zone × lat/lon)
+        - weather_source:   dimension (provider × model × lead_time)
+        - weather_observation: fact, per (source, location, valid_at, fetched_at)
+
+    Runs idempotent CREATE TABLE IF NOT EXISTS, then idempotent
+    INSERT OR IGNORE for the Belgian location + Open-Meteo source seeds.
+
+    See src/weather_schema.py for the canonical schema and variable list.
+    """
+    # Imported here to keep top-level imports light for tests that stub db.
+    from src.weather_schema import (
+        ALL_SCHEMA_SQL,
+        BE_LOCATIONS,
+        OPEN_METEO_SOURCES,
+    )
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        for stmt in ALL_SCHEMA_SQL:
+            cursor.execute(stmt)
+
+        # Seed weather_location with the Belgian rows. INSERT OR IGNORE
+        # skips rows whose (country_code, zone_id) already exists.
+        cursor.executemany(
+            """
+            INSERT OR IGNORE INTO weather_location
+            (country_code, zone_id, lat, lon, weight, description)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            BE_LOCATIONS,
+        )
+
+        # Seed weather_source.
+        cursor.executemany(
+            """
+            INSERT OR IGNORE INTO weather_source
+            (provider, model_id, lead_time_hours, description)
+            VALUES (?, ?, ?, ?)
+            """,
+            OPEN_METEO_SOURCES,
+        )
+
+        conn.commit()
+
+    logger.info(
+        "weather_observation tables created/verified; "
+        "seeded %d BE locations + %d OM sources",
+        len(BE_LOCATIONS),
+        len(OPEN_METEO_SOURCES),
+    )
 
 
 # ============================================================================
