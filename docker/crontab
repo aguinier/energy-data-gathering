@@ -4,5 +4,13 @@
 30 13 * * * cd /app && /usr/local/bin/python3 scripts/update.py >> /app/logs/cron_update.log 2>&1
 30 18 * * * cd /app && /usr/local/bin/python3 scripts/update.py >> /app/logs/cron_update.log 2>&1
 
-# Weather data + forecasts (daily at 15:00 UTC)
+# Weather data + forecasts (daily at 15:00 UTC) — legacy `weather_data` table
 0 15 * * * cd /app && /usr/local/bin/python3 scripts/update_weather.py --forecast >> /app/logs/cron_weather.log 2>&1
+
+# Versioned weather_observation ingest — 3x/day, timed after NWP publishing:
+# - 07:00 UTC: catches 00Z runs (~5-7h lag), ahead of heliocast's 08:00 UTC Predico gate
+# - 13:30 UTC: catches 06Z runs, shares window with 13:30 energy ingest
+# - 19:30 UTC: catches 12Z runs
+0  7 * * * cd /app && /usr/local/bin/python3 scripts/update_weather_observation.py >> /app/logs/cron_weather_obs.log 2>&1
+30 13 * * * cd /app && /usr/local/bin/python3 scripts/update_weather_observation.py >> /app/logs/cron_weather_obs.log 2>&1
+30 19 * * * cd /app && /usr/local/bin/python3 scripts/update_weather_observation.py >> /app/logs/cron_weather_obs.log 2>&1
