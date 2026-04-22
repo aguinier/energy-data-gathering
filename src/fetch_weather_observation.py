@@ -354,9 +354,12 @@ def fetch_realtime_forecast(
 
 
 # NWP models we fetch at real-time (every hour) — matches helio/heliocast
-# NWP_INFERENCE_MODELS. best_match is a no-models merged view, plus the 3
+# NWP_INFERENCE_MODELS. best_match is a no-models merged view, plus the 4
 # individual NWP models so heliocast can compute cross-model disagreement.
-REALTIME_NWP_MODELS = ("best_match", "ecmwf_ifs025", "icon_seamless", "gfs_seamless")
+# KNMI HARMONIE-AROME added 2026-04-22: live hindcast on Predico sessions
+# 515-517 showed it cuts q50 RMSE by ~36% on cloudy-NWP-but-clear-reality
+# days. See heliocast/docs/2026-04-22_knmi_addition.md.
+REALTIME_NWP_MODELS = ("best_match", "ecmwf_ifs025", "icon_seamless", "gfs_seamless", "knmi_harmonie_arome_europe")
 
 
 def fetch_previous_runs(

@@ -129,6 +129,7 @@ OPEN_METEO_SOURCES = [
     ("open_meteo_forecast",         "ecmwf_ifs025",               -1, "Real-time forecast API, ECMWF IFS 0.25°"),
     ("open_meteo_forecast",         "icon_seamless",              -1, "Real-time forecast API, DWD ICON-EU 11 km"),
     ("open_meteo_forecast",         "gfs_seamless",               -1, "Real-time forecast API, NOAA GFS 0.11°"),
+    ("open_meteo_forecast",         "knmi_harmonie_arome_europe", -1, "Real-time forecast API, KNMI HARMONIE-AROME Europe 5.5 km"),
     # Previous Runs archive (3×/day ingest — replay + backtest substrate).
     ("open_meteo_previous_runs",    "best_match",                 24, "Previous Runs API, day1 lead"),
     ("open_meteo_previous_runs",    "best_match",                 72, "Previous Runs API, day3 lead"),
