@@ -354,12 +354,18 @@ def fetch_realtime_forecast(
 
 
 # NWP models we fetch at real-time (every hour) — matches helio/heliocast
-# NWP_INFERENCE_MODELS. best_match is a no-models merged view, plus the 4
+# NWP_INFERENCE_MODELS. best_match is a no-models merged view, plus the
 # individual NWP models so heliocast can compute cross-model disagreement.
 # KNMI HARMONIE-AROME added 2026-04-22: live hindcast on Predico sessions
 # 515-517 showed it cuts q50 RMSE by ~36% on cloudy-NWP-but-clear-reality
 # days. See heliocast/docs/2026-04-22_knmi_addition.md.
-REALTIME_NWP_MODELS = ("best_match", "ecmwf_ifs025", "icon_seamless", "gfs_seamless", "knmi_harmonie_arome_europe")
+# Meteofrance AROME + ICON-D2 added 2026-04-22 as part of helioforge's
+# multi-NWP bakeoff — hourly realtime captures their fetched_at timing
+# diversity going forward.
+REALTIME_NWP_MODELS = (
+    "best_match", "ecmwf_ifs025", "icon_seamless", "gfs_seamless",
+    "knmi_harmonie_arome_europe", "meteofrance_arome_france", "icon_d2",
+)
 
 
 def fetch_previous_runs(
@@ -377,6 +383,9 @@ def fetch_previous_runs(
     if lead_time_hours == 24:
         suffix = "_previous_day1"
         provider_lead = 24
+    elif lead_time_hours == 48:
+        suffix = "_previous_day2"
+        provider_lead = 48
     elif lead_time_hours == 72:
         suffix = "_previous_day3"
         provider_lead = 72
@@ -434,8 +443,11 @@ def fetch_previous_runs(
 # Top-level orchestrator
 # ---------------------------------------------------------------------------
 
-NWP_MODELS = ("best_match", "ecmwf_ifs025", "gfs_seamless", "icon_seamless")
-LEAD_TIMES_HOURS = (24, 72)
+NWP_MODELS = (
+    "best_match", "ecmwf_ifs025", "gfs_seamless", "icon_seamless",
+    "knmi_harmonie_arome_europe", "meteofrance_arome_france", "icon_d2",
+)
+LEAD_TIMES_HOURS = (24, 48, 72)
 
 
 def run_hourly_realtime_ingest(

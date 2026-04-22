@@ -130,15 +130,33 @@ OPEN_METEO_SOURCES = [
     ("open_meteo_forecast",         "icon_seamless",              -1, "Real-time forecast API, DWD ICON-EU 11 km"),
     ("open_meteo_forecast",         "gfs_seamless",               -1, "Real-time forecast API, NOAA GFS 0.11°"),
     ("open_meteo_forecast",         "knmi_harmonie_arome_europe", -1, "Real-time forecast API, KNMI HARMONIE-AROME Europe 5.5 km"),
+    ("open_meteo_forecast",         "meteofrance_arome_france",   -1, "Real-time forecast API, Météo-France AROME France 1.3 km"),
+    ("open_meteo_forecast",         "icon_d2",                    -1, "Real-time forecast API, DWD ICON-D2 2.2 km"),
     # Previous Runs archive (3×/day ingest — replay + backtest substrate).
+    # Each NWP model registered at day1 (24h), day2 (48h), day3 (72h) lead.
+    # Short-range models (AROME, ICON-D2) return NULL for day3 — harmless;
+    # keeps the lead dimension uniform across sources.
     ("open_meteo_previous_runs",    "best_match",                 24, "Previous Runs API, day1 lead"),
+    ("open_meteo_previous_runs",    "best_match",                 48, "Previous Runs API, day2 lead"),
     ("open_meteo_previous_runs",    "best_match",                 72, "Previous Runs API, day3 lead"),
     ("open_meteo_previous_runs",    "ecmwf_ifs025",               24, "ECMWF IFS 0.25°, day1 lead"),
+    ("open_meteo_previous_runs",    "ecmwf_ifs025",               48, "ECMWF IFS 0.25°, day2 lead"),
     ("open_meteo_previous_runs",    "ecmwf_ifs025",               72, "ECMWF IFS 0.25°, day3 lead"),
     ("open_meteo_previous_runs",    "gfs_seamless",               24, "NOAA GFS, day1 lead"),
+    ("open_meteo_previous_runs",    "gfs_seamless",               48, "NOAA GFS, day2 lead"),
     ("open_meteo_previous_runs",    "gfs_seamless",               72, "NOAA GFS, day3 lead"),
     ("open_meteo_previous_runs",    "icon_seamless",              24, "DWD ICON-EU, day1 lead"),
+    ("open_meteo_previous_runs",    "icon_seamless",              48, "DWD ICON-EU, day2 lead"),
     ("open_meteo_previous_runs",    "icon_seamless",              72, "DWD ICON-EU, day3 lead"),
+    ("open_meteo_previous_runs",    "knmi_harmonie_arome_europe", 24, "KNMI HARMONIE-AROME, day1 lead"),
+    ("open_meteo_previous_runs",    "knmi_harmonie_arome_europe", 48, "KNMI HARMONIE-AROME, day2 lead (may be NULL — short-range)"),
+    ("open_meteo_previous_runs",    "knmi_harmonie_arome_europe", 72, "KNMI HARMONIE-AROME, day3 lead (may be NULL — short-range)"),
+    ("open_meteo_previous_runs",    "meteofrance_arome_france",   24, "Météo-France AROME, day1 lead"),
+    ("open_meteo_previous_runs",    "meteofrance_arome_france",   48, "Météo-France AROME, day2 lead (may be NULL — short-range)"),
+    ("open_meteo_previous_runs",    "meteofrance_arome_france",   72, "Météo-France AROME, day3 lead (may be NULL — short-range)"),
+    ("open_meteo_previous_runs",    "icon_d2",                    24, "DWD ICON-D2, day1 lead"),
+    ("open_meteo_previous_runs",    "icon_d2",                    48, "DWD ICON-D2, day2 lead (may be NULL — short-range)"),
+    ("open_meteo_previous_runs",    "icon_d2",                    72, "DWD ICON-D2, day3 lead (may be NULL — short-range)"),
 ]
 
 
