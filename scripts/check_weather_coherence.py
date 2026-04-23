@@ -22,7 +22,7 @@ from typing import TypedDict
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.weather_schema import OPEN_METEO_SOURCES
+from src.weather_schema import OPEN_METEO_SOURCES, WEATHER_VARIABLE_COLUMNS
 
 
 class Drift(TypedDict):
@@ -41,6 +41,23 @@ def check_sources_dimension(conn: sqlite3.Connection) -> Drift:
     )
     db_set: set[tuple[str, str, int]] = {
         (row[0], row[1], row[2]) for row in cursor.fetchall()
+    }
+    return {
+        "only_in_schema": schema_set - db_set,
+        "only_in_db": db_set - schema_set,
+    }
+
+
+def check_columns_dimension(conn: sqlite3.Connection) -> Drift:
+    """Compare WEATHER_VARIABLE_COLUMNS (in code) to weather_observation columns (in DB)."""
+    schema_set: set[str] = set(WEATHER_VARIABLE_COLUMNS)
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(weather_observation)")
+    # PRAGMA returns (cid, name, type, notnull, dflt_value, pk); we want name.
+    # Exclude the PK / metadata columns we don't track in WEATHER_VARIABLE_COLUMNS.
+    metadata_cols = {"source_id", "location_id", "valid_at", "forecast_run_time", "fetched_at"}
+    db_set: set[str] = {
+        row[1] for row in cursor.fetchall() if row[1] not in metadata_cols
     }
     return {
         "only_in_schema": schema_set - db_set,

@@ -42,3 +42,27 @@ def test_check_sources_dimension_detects_missing_db_row(
     drift = check_sources_dimension(seeded_observation_db)
     assert drift["only_in_schema"] == {("open_meteo_archive", "era5", 0)}
     assert drift["only_in_db"] == set()
+
+
+from scripts.check_weather_coherence import check_columns_dimension
+
+
+def test_check_columns_dimension_passes_when_db_matches_schema(
+    seeded_observation_db,
+) -> None:
+    drift = check_columns_dimension(seeded_observation_db)
+    assert drift == {"only_in_schema": set(), "only_in_db": set()}
+
+
+def test_check_columns_dimension_detects_extra_db_column(
+    seeded_observation_db,
+) -> None:
+    cursor = seeded_observation_db.cursor()
+    cursor.execute(
+        "ALTER TABLE weather_observation ADD COLUMN rogue_column REAL"
+    )
+    seeded_observation_db.commit()
+
+    drift = check_columns_dimension(seeded_observation_db)
+    assert drift["only_in_db"] == {"rogue_column"}
+    assert drift["only_in_schema"] == set()
