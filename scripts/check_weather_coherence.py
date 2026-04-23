@@ -22,7 +22,7 @@ from typing import TypedDict
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.weather_schema import OPEN_METEO_SOURCES, WEATHER_VARIABLE_COLUMNS
+from src.weather_schema import LOCATIONS, OPEN_METEO_SOURCES, WEATHER_VARIABLE_COLUMNS
 
 
 class Drift(TypedDict):
@@ -65,6 +65,29 @@ def check_columns_dimension(conn: sqlite3.Connection) -> Drift:
     }
 
 
+def check_locations_dimension(conn: sqlite3.Connection) -> Drift:
+    """Compare LOCATIONS (in code) to weather_location rows (in DB).
+
+    Identity is (country_code, zone_id, zone_type) — the natural key plus
+    zone_type, since zone_type is what fetchers filter on.
+    """
+    schema_set: set[tuple[str, str, str | None]] = {
+        (country, zone_id, zone_type)
+        for country, zone_id, zone_type, *_rest in LOCATIONS
+    }
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT country_code, zone_id, zone_type FROM weather_location"
+    )
+    db_set: set[tuple[str, str, str | None]] = {
+        (row[0], row[1], row[2]) for row in cursor.fetchall()
+    }
+    return {
+        "only_in_schema": schema_set - db_set,
+        "only_in_db": db_set - schema_set,
+    }
+
+
 def _format_drift(name: str, drift: Drift) -> list[str]:
     """Return human-readable lines describing the drift for one dimension."""
     if not drift["only_in_schema"] and not drift["only_in_db"]:
@@ -81,10 +104,12 @@ def run_all_checks(conn: sqlite3.Connection) -> int:
     """Run all coherence checks. Print results, return 0/1."""
     sources_drift = check_sources_dimension(conn)
     columns_drift = check_columns_dimension(conn)
+    locations_drift = check_locations_dimension(conn)
 
     has_drift = False
     for name, drift in [
         ("sources", sources_drift),
+        ("locations", locations_drift),
         ("columns", columns_drift),
     ]:
         for line in _format_drift(name, drift):
