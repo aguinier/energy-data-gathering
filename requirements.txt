@@ -33,3 +33,6 @@ tenacity==8.2.3
 
 # Progress Bars (optional, for backfill visibility)
 tqdm==4.66.1
+
+# Testing
+pytest>=7.0

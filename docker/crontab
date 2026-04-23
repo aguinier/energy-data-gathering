@@ -8,14 +8,15 @@
 0 15 * * * cd /app && /usr/local/bin/python3 scripts/update_weather.py --forecast >> /app/logs/cron_weather.log 2>&1
 
 # Versioned weather_observation — HOURLY real-time ingest.
-# Pulls /v1/forecast for all 4 NWP models (best_match, ecmwf, icon, gfs)
-# × 5 BE locations at XX:30 UTC. Heliocast's :45 UTC runner reads
-# straight from the DB (via GET /api/weather/latest) so the forecast
-# it uses is ≤ 15 min old.
+# Pulls /v1/forecast for all 7 NWP models (best_match, ecmwf_ifs025,
+# icon_seamless, gfs_seamless, knmi_harmonie_arome_europe,
+# meteofrance_arome_france, icon_d2) × all weather_location rows at
+# XX:30 UTC. Heliocast's :45 UTC runner reads straight from the DB
+# (via GET /api/weather/latest) so the forecast it uses is ≤ 15 min old.
 30 * * * * cd /app && /usr/local/bin/python3 scripts/update_weather_observation_hourly.py >> /app/logs/cron_weather_obs_hourly.log 2>&1
 
 # Versioned weather_observation — 3×/day heavy ingest.
-# Adds Previous Runs API (day1 + day3 × 4 NWP models) to the realtime
+# Adds Previous Runs API (day1 + day2 + day3 × 7 NWP models) to the realtime
 # pulls. Timed after NWP publishing windows:
 #  07:00 UTC catches 00Z runs (~5-7h lag), ahead of Predico 08:00 gate
 #  13:30 UTC catches 06Z runs (shares window with energy ingest)

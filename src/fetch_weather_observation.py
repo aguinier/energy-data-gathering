@@ -455,7 +455,7 @@ def run_hourly_realtime_ingest(
     forecast_past_days: int = 1,
     fetched_at: Optional[datetime] = None,
 ) -> dict:
-    """Hourly cadence: pull the real-time forecast for **all 4 NWP models**.
+    """Hourly cadence: pull the real-time forecast for **all 7 NWP models**.
 
     Light: only the real-time `/v1/forecast` endpoint, no Previous Runs.
     Designed to run at :30 UTC each hour so that downstream readers
@@ -491,7 +491,7 @@ def run_ingest(
     forecast_past_days: int = 1,
     fetched_at: Optional[datetime] = None,
 ) -> dict:
-    """Full ingest cycle: real-time forecast (4 NWP) + Previous Runs (4 × 2).
+    """Full ingest cycle: real-time forecast (7 NWP) + Previous Runs (7 × 3).
 
     Used by the 3×/day slots — pulls the full lot. The lightweight
     :meth:`run_hourly_realtime_ingest` is the other cadence tick.
@@ -510,14 +510,14 @@ def run_ingest(
 
     summary: dict[str, int] = {}
 
-    # Real-time forecast — all 4 NWP models (same as hourly ingest).
+    # Real-time forecast — all 7 NWP models (same as hourly ingest).
     summary.update(run_hourly_realtime_ingest(
         forecast_days_ahead=forecast_days_ahead,
         forecast_past_days=forecast_past_days,
         fetched_at=fetched_at_dt,
     ))
 
-    # Previous Runs × 4 models × 2 leads.
+    # Previous Runs × 7 models × 3 leads.
     for model in NWP_MODELS:
         for lead in LEAD_TIMES_HOURS:
             key = f"prev_{model}_day{lead // 24}"

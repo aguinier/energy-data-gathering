@@ -48,36 +48,33 @@ ssh clavain@192.168.86.36 \
 
 ### 1a. Extend the dimension seed
 
-Edit `src/weather_schema.py`:
+Edit `src/weather_schema.py` and append rows to the `LOCATIONS` list.
+The 8-tuple shape is:
 
-```python
-# Rename BE_LOCATIONS → COUNTRY_LOCATIONS (once you have multiple
-# countries, the BE-specific name becomes misleading). Or keep
-# BE_LOCATIONS and add DE_LOCATIONS, etc. Pick one convention and
-# stick with it.
-
-DE_LOCATIONS = [
-    # country_code, zone_id,  lat,  lon,  weight, description
-    ("DE", "centroid", 51.2, 10.45, None, "Germany centroid"),
-    # ... optional zones with capacity weights summing to 1.0 ...
-]
-
-# Export a combined list:
-ALL_LOCATIONS = BE_LOCATIONS + DE_LOCATIONS
+```
+(country_code, zone_id, zone_type, lat, lon, weight, capacity_mw, description)
 ```
 
-Update `src/db.py::create_weather_observation_tables()` to iterate
-`ALL_LOCATIONS` instead of `BE_LOCATIONS` (or whichever variable it
-references today).
+`zone_type` values: `'centroid'` (single-point), `'solar'` (capacity-weighted PV),
+`'wind_onshore'`, `'wind_offshore'`. Example for Germany:
+
+```python
+LOCATIONS = [
+    # ... existing BE rows ...
+    ("DE", "centroid", "centroid", 51.2, 10.45, 1.00, None, "Germany centroid"),
+    # ... optional capacity-weighted zones (weights must sum to 1.0) ...
+]
+```
+
+`src/db.py::create_weather_observation_tables()` already iterates
+`LOCATIONS` — no change needed there.
 
 ### 1b. Teach the fetcher about the new country
 
 Edit `src/fetch_weather_observation.py`:
 
-1. `_get_be_locations()` — rename to `_get_locations(country_code)`
-   and parameterize the query. If you don't want to touch heliocast
-   right now, leave the BE-only helper and add a new
-   `_get_de_locations()` helper.
+1. `_get_be_locations()` — parameterize it to accept a `country_code`
+   argument (or add a `_get_locations(country_code)` helper).
 2. The top-level ingest orchestrators (`run_hourly_realtime_ingest`,
    `run_ingest`) should loop over countries:
    ```python
@@ -91,13 +88,20 @@ Edit `src/fetch_weather_observation.py`:
 ```bash
 ENERGY_DB_PATH=/tmp/scratch.db python scripts/init_weather_observation.py
 ENERGY_DB_PATH=/tmp/scratch.db python scripts/update_weather_observation_hourly.py
-# Verify:
+# Verify observation counts:
 sqlite3 /tmp/scratch.db "SELECT country_code, COUNT(*) FROM weather_observation wo
   JOIN weather_location l ON wo.location_id = l.location_id
   WHERE fetched_at > datetime('now', '-1 hour') GROUP BY country_code;"
 ```
 
 Expected: one row per country, non-zero counts.
+
+```bash
+# Run coherence check on scratch:
+python scripts/check_weather_coherence.py --db /tmp/scratch.db
+```
+
+Expected: `PASS: sources`, `PASS: locations`, `PASS: columns`, exit 0.
 
 ### 1d. Deploy
 

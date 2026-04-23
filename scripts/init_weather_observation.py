@@ -25,8 +25,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import config
 import utils
+from scripts.check_weather_coherence import run_all_checks
 from src import db
-from src.weather_schema import BE_LOCATIONS, OPEN_METEO_SOURCES
+from src.weather_schema import LOCATIONS, OPEN_METEO_SOURCES
 
 
 def _verify() -> int:
@@ -44,19 +45,17 @@ def _verify() -> int:
             return 1
 
         # Check dimension row counts.
-        cursor.execute(
-            "SELECT COUNT(*) FROM weather_location WHERE country_code = 'BE'"
-        )
+        cursor.execute("SELECT COUNT(*) FROM weather_location")
         n_loc = cursor.fetchone()[0]
         cursor.execute("SELECT COUNT(*) FROM weather_source")
         n_src = cursor.fetchone()[0]
 
         print("Tables present: " + ", ".join(sorted(expected)))
-        print(f"weather_location (BE): {n_loc} rows (expected {len(BE_LOCATIONS)})")
+        print(f"weather_location:      {n_loc} rows (expected {len(LOCATIONS)})")
         print(f"weather_source:        {n_src} rows (expected {len(OPEN_METEO_SOURCES)})")
 
-        if n_loc < len(BE_LOCATIONS):
-            print("WARN: fewer BE locations seeded than expected")
+        if n_loc < len(LOCATIONS):
+            print("WARN: fewer locations seeded than expected")
         if n_src < len(OPEN_METEO_SOURCES):
             print("WARN: fewer sources seeded than expected")
 
@@ -68,7 +67,10 @@ def _verify() -> int:
         idx_names = [row[0] for row in cursor.fetchall()]
         print(f"weather_observation indexes: {idx_names}")
 
-        return 0
+        # Coherence check: schema constants ↔ DB rows.
+        print("---")
+        coherence_exit = run_all_checks(conn)
+        return coherence_exit
 
 
 def main() -> int:

@@ -44,7 +44,7 @@ we know at 07:45 UTC last Tuesday?) are exact.
 │                                                    (RW, token-auth,│
 │      XX:30 UTC  (HOURLY — NEW)                     kept for back-  │
 │        → update_weather_observation_                compat; will   │
-│          hourly.py  (4 NWP, realtime)              be removed)     │
+│          hourly.py  (7 NWP, realtime)              be removed)     │
 │                                                                     │
 │      07:00, 13:30, 19:30 UTC                                        │
 │        → update_weather_observation.py                              │
@@ -110,8 +110,8 @@ weighted PV zones matching heliocast/helio's model definition (central
 | `lead_time_hours` | INTEGER | `0` = observation, `-1` = real-time, `24` = day-1 lead, `72` = day-3 lead |
 | `UNIQUE(provider, model_id, lead_time_hours)` | |
 
-Seeded with 10 rows covering ERA5 historical + realtime best_match +
-{4 NWP models × 2 leads}.
+Seeded with 29 rows covering ERA5 historical + {7 realtime NWP models}
++ {7 NWP models × 3 leads} via the Previous Runs API.
 
 ### `weather_observation` — fact
 
@@ -148,9 +148,10 @@ CREATE INDEX idx_wx_source_latest
 
 `docker/crontab` runs `scripts/update_weather_observation_hourly.py`
 at `XX:30 UTC` every hour. Pulls the `/v1/forecast` endpoint for
-**all 4 NWP models** (best_match, ecmwf_ifs025, icon_seamless,
-gfs_seamless) × **5 BE locations** (centroid + 4 capacity zones).
-Each pull writes ~360 rows per model × 4 models = ~1.4K rows.
+**all 7 NWP models** (best_match, ecmwf_ifs025, icon_seamless,
+gfs_seamless, knmi_harmonie_arome_europe, meteofrance_arome_france,
+icon_d2) × **5 BE locations** (centroid + 4 capacity zones).
+Each pull writes ~360 rows per model × 7 models = ~2.5K rows.
 Wall time < 10 s. Heliocast reads at `XX:45 UTC`, so the freshest
 row is ~15 min old when inference uses it.
 
@@ -159,10 +160,11 @@ row is ~15 min old when inference uses it.
 Same script as before (`update_weather_observation.py`), now focused
 on Previous Runs API. Runs at 07:00, 13:30, 19:30 UTC — timed after
 each NWP publishing window so the 24h/72h lead-time stored runs are
-fresh. Fetches for all 4 NWP models × {day1, day3} × 5 locations,
-past 7 days rolling.
+fresh. Fetches for all 7 NWP models (best_match, ecmwf_ifs025, icon_seamless,
+gfs_seamless, knmi_harmonie_arome_europe, meteofrance_arome_france,
+icon_d2) × {day1, day2, day3} × 5 locations, past 7 days rolling.
 
-Also runs the real-time forecast for all 4 models (same as Phase A)
+Also runs the real-time forecast for all 7 models (same as Phase A)
 so the 3×/day slots double-confirm the hourly ingest.
 
 ### C. Heliocast read (pull, not push)
@@ -344,6 +346,96 @@ No Alembic — we `CREATE TABLE IF NOT EXISTS`. To add a column:
 Keep `helioforge/src/data/weather_db_loader.py::WEATHER_VARIABLE_COLUMNS`
 in sync (it's a deliberately duplicated short list — no import
 dependency between repos).
+
+### Replica recovery (workstation `C:\Code\able\data\energy_dashboard.db`)
+
+**Symptoms.** The daily 07:00-local sync (`able-db-sync` Windows
+Task Scheduler entry, runs `C:\Code\able\scripts\sync-db-from-prod.ps1`)
+silently produces a corrupted replica. Diagnosis hits all three:
+
+```bash
+ls -lh   "/c/Code/able/data/energy_dashboard.db"   # ≈ prod size (e.g. 3.9 G), mtime matches 07:00
+head -c 16 "/c/Code/able/data/energy_dashboard.db" | xxd
+#   0000 0000 0000 0000 0000 0000 0000 0000   <-- all zeros, NOT "SQLite format 3"
+file     "/c/Code/able/data/energy_dashboard.db"
+#   .../energy_dashboard.db: data            <-- NOT "SQLite 3.x database"
+```
+
+The Task Scheduler `LastTaskResult` is `0` (success) — the script
+doesn't notice the corruption.
+
+**Root cause (seen 2026-04-23).** `sync-db-from-prod.ps1` runs
+`sqlite3.backup()` on prod into `/tmp/energy_dashboard_sync.db`,
+then `scp`'s the snapshot down. Prod `/tmp` is `tmpfs` capped at
+**3.9 GB**, but the prod DB is now **4.0 GB+** (and `backup()`
+defragments → output ~4.2 GB). The snapshot ENOSPC's mid-write
+without the script noticing (the heredoc-wrapped Python's exit code
+is masked by the trailing `ls -lh`), `scp` faithfully transfers the
+zero-padded partial file, and the local `Move-Item` swaps it in.
+Net effect: working replica is replaced by a 3.9-GB block of zeros.
+
+**Recovery — operator commands.**
+
+```bash
+# 1. Confirm prod source-of-truth is intact (run from anywhere with SSH access)
+ssh clavain@192.168.86.36 \
+  'docker exec energy-data-gathering python -c "import sqlite3; \
+     c=sqlite3.connect(\"/data/energy_dashboard.db\"); \
+     print(list(c.execute(\"PRAGMA quick_check;\")))"'
+# Expected: [('ok',)]
+# (sqlite3 CLI isn't installed on the host or in the container,
+#  so we use Python's built-in sqlite3 module via the running
+#  data-gathering container which already has the DB mounted at /data.)
+
+# 2. Move the broken replica aside (don't delete — keep for forensics)
+mv "/c/Code/able/data/energy_dashboard.db" \
+   "/c/Code/able/data/energy_dashboard.db.broken-$(date +%F)"
+
+# 3. Snapshot prod into /home (820 G free) — NOT /tmp (3.9 G tmpfs)
+ssh clavain@192.168.86.36 'python3 - <<PY
+import sqlite3, os
+src = "/home/clavain/energy-dashboard/data/energy_dashboard.db"
+dst = "/home/clavain/energy_dashboard_sync.db"
+if os.path.exists(dst): os.remove(dst)
+s = sqlite3.connect(src); d = sqlite3.connect(dst)
+with d: s.backup(d)
+d.close(); s.close()
+print(f"snapshot OK, size={os.path.getsize(dst):,} bytes")
+PY'
+
+# 4. Pull it down
+scp clavain@192.168.86.36:/home/clavain/energy_dashboard_sync.db \
+    "/c/Code/able/data/energy_dashboard.db"
+
+# 5. Verify locally (no sqlite3 CLI on the workstation either — use Python)
+python -c "import sqlite3; c=sqlite3.connect('C:/Code/able/data/energy_dashboard.db'); \
+  print('quick_check:', list(c.execute('PRAGMA quick_check;'))); \
+  print('weather_observation:', list(c.execute('SELECT COUNT(*) FROM weather_observation;')))"
+# Expected: quick_check ok; weather_observation count matches prod (~2.25 M as of 2026-04-23)
+
+# 6. Clean up the prod-side temp snapshot
+ssh clavain@192.168.86.36 'rm -f /home/clavain/energy_dashboard_sync.db'
+```
+
+**Permanent fix (TODO — not done in this recovery).** Patch
+`C:\Code\able\scripts\sync-db-from-prod.ps1` so it:
+
+1. Snapshots into `/home/clavain/` (or any non-`tmpfs` path with
+   ≥ 2× the DB size free), not `/tmp`.
+2. Verifies the snapshot before transfer:
+   `python3 -c "import sqlite3; print(list(sqlite3.connect('$RemoteTmp').execute('PRAGMA quick_check;')))"`
+   and aborts on anything other than `[('ok',)]`.
+3. Verifies after the local atomic-swap with the same `quick_check`,
+   and rolls back to the previous DB on failure.
+4. Logs a heartbeat to `C:\Code\able\data\sync.log` so a stale
+   replica is detectable without parsing Task Scheduler history.
+
+**Causes seen in the wild:** snapshot ENOSPC on prod tmpfs (the
+2026-04-23 case), interrupted `scp` (network drop mid-transfer),
+filesystem pre-allocation that never received data, antivirus
+quarantine of the destination file mid-swap.
+
+**Prevention:** for the tmpfs ENOSPC case demonstrated above, see "Permanent fix (TODO)" — snapshot to `/home`, verify exit code, post-swap `quick_check`. For the *network-drop* failure mode (interrupted scp/rsync mid-transfer), switch the sync to `rsync --partial --inplace` so partial transfers can resume cleanly. In both cases, a post-swap `quick_check` that fails the scheduled task is the catch-all that prevents a corrupted file from silently replacing a good one.
 
 ## Files in this subsystem
 
