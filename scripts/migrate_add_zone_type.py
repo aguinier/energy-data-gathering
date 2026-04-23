@@ -47,6 +47,13 @@ def migrate(conn: sqlite3.Connection) -> None:
     if not _column_exists(conn, "weather_location", "capacity_mw"):
         cursor.execute("ALTER TABLE weather_location ADD COLUMN capacity_mw REAL")
 
+    # NOTE — non-atomic DDL+DML: Python's sqlite3 module issues an implicit COMMIT
+    # before each DDL statement (ALTER TABLE), so the two ADD COLUMN statements above
+    # each commit immediately and are NOT part of the transaction closed by conn.commit()
+    # below. If the process dies between the ALTERs and the UPDATEs the columns exist
+    # but zone_type is NULL; on rerun _column_exists() skips the ALTERs and the UPDATE
+    # backfill re-applies the same values idempotently, leaving the DB in a clean state.
+
     # Step 2: Backfill BE rows. Idempotent — reapplies same value if already set.
     cursor.execute(
         "UPDATE weather_location SET zone_type = 'centroid' "
