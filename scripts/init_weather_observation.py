@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import config
 import utils
+from scripts.check_weather_coherence import run_all_checks
 from src import db
 from src.weather_schema import BE_LOCATIONS, OPEN_METEO_SOURCES
 
@@ -68,7 +69,10 @@ def _verify() -> int:
         idx_names = [row[0] for row in cursor.fetchall()]
         print(f"weather_observation indexes: {idx_names}")
 
-        return 0
+        # Coherence check: schema constants ↔ DB rows.
+        print("---")
+        coherence_exit = run_all_checks(conn)
+        return coherence_exit
 
 
 def main() -> int:

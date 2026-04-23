@@ -63,3 +63,57 @@ def check_columns_dimension(conn: sqlite3.Connection) -> Drift:
         "only_in_schema": schema_set - db_set,
         "only_in_db": db_set - schema_set,
     }
+
+
+def _format_drift(name: str, drift: Drift) -> list[str]:
+    """Return human-readable lines describing the drift for one dimension."""
+    if not drift["only_in_schema"] and not drift["only_in_db"]:
+        return [f"PASS: {name}"]
+    lines = [f"DRIFT: {name}"]
+    for item in sorted(drift["only_in_schema"], key=str):
+        lines.append(f"  schema-only: {item}")
+    for item in sorted(drift["only_in_db"], key=str):
+        lines.append(f"  db-only:     {item}")
+    return lines
+
+
+def run_all_checks(conn: sqlite3.Connection) -> int:
+    """Run all coherence checks. Print results, return 0/1."""
+    sources_drift = check_sources_dimension(conn)
+    columns_drift = check_columns_dimension(conn)
+
+    has_drift = False
+    for name, drift in [
+        ("sources", sources_drift),
+        ("columns", columns_drift),
+    ]:
+        for line in _format_drift(name, drift):
+            print(line)
+        if drift["only_in_schema"] or drift["only_in_db"]:
+            has_drift = True
+
+    return 1 if has_drift else 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--db",
+        default=None,
+        help="Path to SQLite DB (default: read from config.DATABASE_PATH).",
+    )
+    args = parser.parse_args()
+
+    if args.db is None:
+        import config
+        db_path = config.DATABASE_PATH
+    else:
+        db_path = args.db
+
+    print(f"Database: {db_path}")
+    with sqlite3.connect(db_path) as conn:
+        return run_all_checks(conn)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
