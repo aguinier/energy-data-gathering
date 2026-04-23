@@ -103,17 +103,24 @@ OPENMETEO_TO_DB = {
 # Dimension seeds — Belgium first
 # ---------------------------------------------------------------------------
 #
-# BE_LOCATIONS mirrors helio's capacity-weighted 4-zone split of Belgian
-# PV + a single country centroid used by able's existing weather_data
-# single-point ingest.
-
-BE_LOCATIONS = [
-    # country_code, zone_id,     lat,  lon,  weight, description
-    ("BE", "centroid", 50.5,  4.45, None, "Able centroid (legacy weather_data point)"),
-    ("BE", "central",  50.8,  4.3,  0.40, "Central Belgium (40% of PV capacity)"),
-    ("BE", "north",    51.1,  4.8,  0.30, "Northern Belgium (30%)"),
-    ("BE", "south",    50.4,  4.0,  0.20, "Southern Belgium (20%)"),
-    ("BE", "east",     50.2,  5.5,  0.10, "Eastern Belgium (10%)"),
+# Unified locations source of truth (Phase 1 — BE only; Phase 2 expands to all 39 countries).
+# Tuple shape: (country_code, zone_id, zone_type, lat, lon, weight, capacity_mw, description)
+#
+# zone_type values:
+#   'centroid'      — single-point country centroid (legacy weather_data semantics)
+#   'solar'         — capacity-weighted PV cluster
+#   'wind_onshore'  — capacity-weighted onshore wind cluster
+#   'wind_offshore' — capacity-weighted offshore wind cluster
+#
+# Pre-Phase-2 BE rows: 'central'/'north'/'south'/'east' were originally
+# PV-capacity-weighted zones, so they map to zone_type='solar'.
+LOCATIONS = [
+    # country, zone_id,    zone_type,  lat,   lon,  weight, capacity_mw, description
+    ("BE",     "centroid", "centroid", 50.5,  4.45, 1.00,   None,        "Belgium centroid (legacy weather_data point)"),
+    ("BE",     "central",  "solar",    50.8,  4.3,  0.40,   None,        "Central Belgium (40% of PV capacity)"),
+    ("BE",     "north",    "solar",    51.1,  4.8,  0.30,   None,        "Northern Belgium (30%)"),
+    ("BE",     "south",    "solar",    50.4,  4.0,  0.20,   None,        "Southern Belgium (20%)"),
+    ("BE",     "east",     "solar",    50.2,  5.5,  0.10,   None,        "Eastern Belgium (10%)"),
 ]
 
 
@@ -169,9 +176,11 @@ CREATE TABLE IF NOT EXISTS weather_location (
     location_id   INTEGER PRIMARY KEY AUTOINCREMENT,
     country_code  TEXT    NOT NULL,
     zone_id       TEXT    NOT NULL,
+    zone_type     TEXT,
     lat           REAL    NOT NULL,
     lon           REAL    NOT NULL,
     weight        REAL,
+    capacity_mw   REAL,
     description   TEXT,
     created_at    TEXT    DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(country_code, zone_id)
@@ -214,6 +223,10 @@ SCHEMA_INDEXES = [
     CREATE INDEX IF NOT EXISTS idx_wx_source_latest
     ON weather_observation(source_id, location_id, fetched_at DESC, valid_at)
     """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_weather_location_zone_type
+    ON weather_location(zone_type)
+    """,
 ]
 
 
@@ -223,7 +236,7 @@ ALL_SCHEMA_SQL = [SCHEMA_LOCATION, SCHEMA_SOURCE, SCHEMA_OBSERVATION, *SCHEMA_IN
 __all__ = [
     "WEATHER_VARIABLE_COLUMNS",
     "OPENMETEO_TO_DB",
-    "BE_LOCATIONS",
+    "LOCATIONS",
     "OPEN_METEO_SOURCES",
     "SCHEMA_LOCATION",
     "SCHEMA_SOURCE",
