@@ -235,7 +235,7 @@ def create_weather_observation_tables():
     # Imported here to keep top-level imports light for tests that stub db.
     from src.weather_schema import (
         ALL_SCHEMA_SQL,
-        BE_LOCATIONS,
+        LOCATIONS,
         OPEN_METEO_SOURCES,
     )
 
@@ -249,10 +249,10 @@ def create_weather_observation_tables():
         cursor.executemany(
             """
             INSERT OR IGNORE INTO weather_location
-            (country_code, zone_id, lat, lon, weight, description)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (country_code, zone_id, zone_type, lat, lon, weight, capacity_mw, description)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            BE_LOCATIONS,
+            LOCATIONS,
         )
 
         # Seed weather_source.
@@ -269,8 +269,8 @@ def create_weather_observation_tables():
 
     logger.info(
         "weather_observation tables created/verified; "
-        "seeded %d BE locations + %d OM sources",
-        len(BE_LOCATIONS),
+        "seeded %d locations + %d OM sources",
+        len(LOCATIONS),
         len(OPEN_METEO_SOURCES),
     )
 

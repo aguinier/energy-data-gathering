@@ -27,7 +27,7 @@ def seeded_observation_db(in_memory_db: sqlite3.Connection) -> sqlite3.Connectio
     test that exercises the migration.
     """
     from src.weather_schema import (
-        BE_LOCATIONS,
+        LOCATIONS,
         OPEN_METEO_SOURCES,
         ALL_SCHEMA_SQL,
     )
@@ -37,9 +37,9 @@ def seeded_observation_db(in_memory_db: sqlite3.Connection) -> sqlite3.Connectio
         cursor.execute(stmt)
     cursor.executemany(
         "INSERT OR IGNORE INTO weather_location "
-        "(country_code, zone_id, lat, lon, weight, description) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        BE_LOCATIONS,
+        "(country_code, zone_id, zone_type, lat, lon, weight, capacity_mw, description) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        LOCATIONS,
     )
     cursor.executemany(
         "INSERT OR IGNORE INTO weather_source "
