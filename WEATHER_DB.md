@@ -433,11 +433,7 @@ ssh clavain@192.168.86.36 'rm -f /home/clavain/energy_dashboard_sync.db'
 filesystem pre-allocation that never received data, antivirus
 quarantine of the destination file mid-swap.
 
-**Prevention guidance for any rewrite of the sync script:** use
-`rsync --partial --inplace` instead of `Remove-Item` + `scp` so
-partial transfers can resume safely; always run a post-sync
-`PRAGMA quick_check` and exit non-zero on failure so
-`LastTaskResult` reflects reality.
+**Prevention:** for the tmpfs ENOSPC case demonstrated above, see "Permanent fix (TODO)" — snapshot to `/home`, verify exit code, post-swap `quick_check`. For the *network-drop* failure mode (interrupted scp/rsync mid-transfer), switch the sync to `rsync --partial --inplace` so partial transfers can resume cleanly. In both cases, a post-swap `quick_check` that fails the scheduled task is the catch-all that prevents a corrupted file from silently replacing a good one.
 
 ## Files in this subsystem
 
