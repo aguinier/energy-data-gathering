@@ -345,6 +345,100 @@ Keep `helioforge/src/data/weather_db_loader.py::WEATHER_VARIABLE_COLUMNS`
 in sync (it's a deliberately duplicated short list — no import
 dependency between repos).
 
+### Replica recovery (workstation `C:\Code\able\data\energy_dashboard.db`)
+
+**Symptoms.** The daily 07:00-local sync (`able-db-sync` Windows
+Task Scheduler entry, runs `C:\Code\able\scripts\sync-db-from-prod.ps1`)
+silently produces a corrupted replica. Diagnosis hits all three:
+
+```bash
+ls -lh   "/c/Code/able/data/energy_dashboard.db"   # ≈ prod size (e.g. 3.9 G), mtime matches 07:00
+head -c 16 "/c/Code/able/data/energy_dashboard.db" | xxd
+#   0000 0000 0000 0000 0000 0000 0000 0000   <-- all zeros, NOT "SQLite format 3"
+file     "/c/Code/able/data/energy_dashboard.db"
+#   .../energy_dashboard.db: data            <-- NOT "SQLite 3.x database"
+```
+
+The Task Scheduler `LastTaskResult` is `0` (success) — the script
+doesn't notice the corruption.
+
+**Root cause (seen 2026-04-23).** `sync-db-from-prod.ps1` runs
+`sqlite3.backup()` on prod into `/tmp/energy_dashboard_sync.db`,
+then `scp`'s the snapshot down. Prod `/tmp` is `tmpfs` capped at
+**3.9 GB**, but the prod DB is now **4.0 GB+** (and `backup()`
+defragments → output ~4.2 GB). The snapshot ENOSPC's mid-write
+without the script noticing (the heredoc-wrapped Python's exit code
+is masked by the trailing `ls -lh`), `scp` faithfully transfers the
+zero-padded partial file, and the local `Move-Item` swaps it in.
+Net effect: working replica is replaced by a 3.9-GB block of zeros.
+
+**Recovery — operator commands.**
+
+```bash
+# 1. Confirm prod source-of-truth is intact (run from anywhere with SSH access)
+ssh clavain@192.168.86.36 \
+  'docker exec energy-data-gathering python -c "import sqlite3; \
+     c=sqlite3.connect(\"/data/energy_dashboard.db\"); \
+     print(list(c.execute(\"PRAGMA quick_check;\")))"'
+# Expected: [('ok',)]
+# (sqlite3 CLI isn't installed on the host or in the container,
+#  so we use Python's built-in sqlite3 module via the running
+#  data-gathering container which already has the DB mounted at /data.)
+
+# 2. Move the broken replica aside (don't delete — keep for forensics)
+mv "/c/Code/able/data/energy_dashboard.db" \
+   "/c/Code/able/data/energy_dashboard.db.broken-$(date +%F)"
+
+# 3. Snapshot prod into /home (820 G free) — NOT /tmp (3.9 G tmpfs)
+ssh clavain@192.168.86.36 'python3 - <<PY
+import sqlite3, os
+src = "/home/clavain/energy-dashboard/data/energy_dashboard.db"
+dst = "/home/clavain/energy_dashboard_sync.db"
+if os.path.exists(dst): os.remove(dst)
+s = sqlite3.connect(src); d = sqlite3.connect(dst)
+with d: s.backup(d)
+d.close(); s.close()
+print(f"snapshot OK, size={os.path.getsize(dst):,} bytes")
+PY'
+
+# 4. Pull it down
+scp clavain@192.168.86.36:/home/clavain/energy_dashboard_sync.db \
+    "/c/Code/able/data/energy_dashboard.db"
+
+# 5. Verify locally (no sqlite3 CLI on the workstation either — use Python)
+python -c "import sqlite3; c=sqlite3.connect('C:/Code/able/data/energy_dashboard.db'); \
+  print('quick_check:', list(c.execute('PRAGMA quick_check;'))); \
+  print('weather_observation:', list(c.execute('SELECT COUNT(*) FROM weather_observation;')))"
+# Expected: quick_check ok; weather_observation count matches prod (~2.25 M as of 2026-04-23)
+
+# 6. Clean up the prod-side temp snapshot
+ssh clavain@192.168.86.36 'rm -f /home/clavain/energy_dashboard_sync.db'
+```
+
+**Permanent fix (TODO — not done in this recovery).** Patch
+`C:\Code\able\scripts\sync-db-from-prod.ps1` so it:
+
+1. Snapshots into `/home/clavain/` (or any non-`tmpfs` path with
+   ≥ 2× the DB size free), not `/tmp`.
+2. Verifies the snapshot before transfer:
+   `python3 -c "import sqlite3; print(list(sqlite3.connect('$RemoteTmp').execute('PRAGMA quick_check;')))"`
+   and aborts on anything other than `[('ok',)]`.
+3. Verifies after the local atomic-swap with the same `quick_check`,
+   and rolls back to the previous DB on failure.
+4. Logs a heartbeat to `C:\Code\able\data\sync.log` so a stale
+   replica is detectable without parsing Task Scheduler history.
+
+**Causes seen in the wild:** snapshot ENOSPC on prod tmpfs (the
+2026-04-23 case), interrupted `scp` (network drop mid-transfer),
+filesystem pre-allocation that never received data, antivirus
+quarantine of the destination file mid-swap.
+
+**Prevention guidance for any rewrite of the sync script:** use
+`rsync --partial --inplace` instead of `Remove-Item` + `scp` so
+partial transfers can resume safely; always run a post-sync
+`PRAGMA quick_check` and exit non-zero on failure so
+`LastTaskResult` reflects reality.
+
 ## Files in this subsystem
 
 | Repo | Path | Role |
