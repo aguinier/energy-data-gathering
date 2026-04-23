@@ -44,7 +44,7 @@ we know at 07:45 UTC last Tuesday?) are exact.
 │                                                    (RW, token-auth,│
 │      XX:30 UTC  (HOURLY — NEW)                     kept for back-  │
 │        → update_weather_observation_                compat; will   │
-│          hourly.py  (4 NWP, realtime)              be removed)     │
+│          hourly.py  (7 NWP, realtime)              be removed)     │
 │                                                                     │
 │      07:00, 13:30, 19:30 UTC                                        │
 │        → update_weather_observation.py                              │
@@ -110,8 +110,8 @@ weighted PV zones matching heliocast/helio's model definition (central
 | `lead_time_hours` | INTEGER | `0` = observation, `-1` = real-time, `24` = day-1 lead, `72` = day-3 lead |
 | `UNIQUE(provider, model_id, lead_time_hours)` | |
 
-Seeded with 10 rows covering ERA5 historical + realtime best_match +
-{4 NWP models × 2 leads}.
+Seeded with 29 rows covering ERA5 historical + {7 realtime NWP models}
++ {7 NWP models × 3 leads} via the Previous Runs API.
 
 ### `weather_observation` — fact
 
@@ -148,9 +148,10 @@ CREATE INDEX idx_wx_source_latest
 
 `docker/crontab` runs `scripts/update_weather_observation_hourly.py`
 at `XX:30 UTC` every hour. Pulls the `/v1/forecast` endpoint for
-**all 4 NWP models** (best_match, ecmwf_ifs025, icon_seamless,
-gfs_seamless) × **5 BE locations** (centroid + 4 capacity zones).
-Each pull writes ~360 rows per model × 4 models = ~1.4K rows.
+**all 7 NWP models** (best_match, ecmwf_ifs025, icon_seamless,
+gfs_seamless, knmi_harmonie_arome_europe, meteofrance_arome_france,
+icon_d2) × **5 BE locations** (centroid + 4 capacity zones).
+Each pull writes ~360 rows per model × 7 models = ~2.5K rows.
 Wall time < 10 s. Heliocast reads at `XX:45 UTC`, so the freshest
 row is ~15 min old when inference uses it.
 
@@ -159,10 +160,11 @@ row is ~15 min old when inference uses it.
 Same script as before (`update_weather_observation.py`), now focused
 on Previous Runs API. Runs at 07:00, 13:30, 19:30 UTC — timed after
 each NWP publishing window so the 24h/72h lead-time stored runs are
-fresh. Fetches for all 4 NWP models × {day1, day3} × 5 locations,
-past 7 days rolling.
+fresh. Fetches for all 7 NWP models (best_match, ecmwf_ifs025, icon_seamless,
+gfs_seamless, knmi_harmonie_arome_europe, meteofrance_arome_france,
+icon_d2) × {day1, day2, day3} × 5 locations, past 7 days rolling.
 
-Also runs the real-time forecast for all 4 models (same as Phase A)
+Also runs the real-time forecast for all 7 models (same as Phase A)
 so the 3×/day slots double-confirm the hourly ingest.
 
 ### C. Heliocast read (pull, not push)

@@ -20,11 +20,11 @@ def in_memory_db() -> Iterator[sqlite3.Connection]:
 
 @pytest.fixture
 def seeded_observation_db(in_memory_db: sqlite3.Connection) -> sqlite3.Connection:
-    """In-memory DB with the current production weather_observation schema applied + BE seed rows.
+    """In-memory DB with the post-Phase-1 weather_observation schema and full dimension seeds.
 
-    Use this when testing migration scripts or coherence checks against the
-    pre-Phase-1 schema state. Post-Phase-1 schema is the responsibility of the
-    test that exercises the migration.
+    Applies ALL_SCHEMA_SQL, then seeds weather_location from LOCATIONS (5 BE rows)
+    and weather_source from OPEN_METEO_SOURCES (29 rows: ERA5 + 7 realtime NWP +
+    7 NWP models × 3 leads via Previous Runs).
     """
     from src.weather_schema import (
         LOCATIONS,
