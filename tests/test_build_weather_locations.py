@@ -22,6 +22,7 @@ from scripts.build_weather_locations import (
     cluster_zones,
     haversine_km,
     pick_adaptive_k,
+    projected_daily_api_calls,
 )
 
 
@@ -239,6 +240,39 @@ def test_build_locations_offshore_requires_operating_data() -> None:
     country_coords = {"PL": (51.9, 19.15, "Poland")}
     locations = build_locations(plants, country_coords)
     assert not any(loc[0] == "PL" and loc[2] == "wind_offshore" for loc in locations)
+
+
+# ---------------------------------------------------------------------------
+# projected_daily_api_calls — quota math
+# ---------------------------------------------------------------------------
+
+
+def test_projected_daily_api_calls_5_locations_fits_one_batch() -> None:
+    # Current (Phase 1) shape: 5 BE locations, 1 batch per tick.
+    est = projected_daily_api_calls(5)
+    assert est["batches_per_tick"] == 1
+    assert est["realtime_per_hour"] == 7           # 7 models × 1 batch
+    assert est["realtime_per_day"] == 7 * 24       # = 168
+    assert est["previous_runs_per_day"] == 21 * 3  # = 63
+    assert est["total_per_day"] == 168 + 63        # = 231
+
+
+def test_projected_daily_api_calls_phase2_shape_337_locations() -> None:
+    est = projected_daily_api_calls(337)
+    # 337 / 50 rounds up to 7 batches per tick.
+    assert est["batches_per_tick"] == 7
+    assert est["realtime_per_day"] == 7 * 7 * 24   # 1176
+    assert est["previous_runs_per_day"] == 21 * 7 * 3  # 441
+    assert est["total_per_day"] == 1176 + 441      # 1617
+    # Well under the Professional-tier warn threshold of 200k.
+    assert est["total_per_day"] < 200_000
+
+
+def test_projected_daily_api_calls_exact_batch_boundary() -> None:
+    # 50 locations = exactly 1 batch (no rounding up).
+    assert projected_daily_api_calls(50)["batches_per_tick"] == 1
+    # 51 locations = 2 batches.
+    assert projected_daily_api_calls(51)["batches_per_tick"] == 2
 
 
 # ---------------------------------------------------------------------------

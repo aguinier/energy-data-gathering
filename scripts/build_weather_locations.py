@@ -400,6 +400,62 @@ def build_locations(
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Quota probe — projected Open-Meteo API call count at steady state
+# ---------------------------------------------------------------------------
+
+# Steady-state cron cadence, mirrored from `docker/crontab`:
+#   XX:30 UTC hourly  — 1 call per batch × 7 realtime models = 7/batch/hour
+#   07/13/20 UTC 3×/d — 7 models × 3 leads = 21 Previous Runs calls/batch/run
+# Batches come from MAX_LOCATIONS_PER_CALL in src/fetch_weather_observation.py.
+
+# Kept in sync with src/fetch_weather_observation.py::MAX_LOCATIONS_PER_CALL.
+_MAX_LOCATIONS_PER_CALL = 50
+_REALTIME_MODELS_PER_TICK = 7
+_PREVIOUS_RUNS_SOURCES = 21  # 7 models × 3 leads
+_PREVIOUS_RUNS_TICKS_PER_DAY = 3
+_DEFAULT_QUOTA_WARN_PER_DAY = 200_000  # Open-Meteo Professional tier typical
+
+
+def projected_daily_api_calls(n_locations: int) -> dict[str, int]:
+    """Estimate hourly + 3×/day Open-Meteo call volume for `n_locations`."""
+    batches_per_tick = max(1, (n_locations + _MAX_LOCATIONS_PER_CALL - 1)
+                              // _MAX_LOCATIONS_PER_CALL)
+    realtime_per_hour = _REALTIME_MODELS_PER_TICK * batches_per_tick
+    realtime_per_day = realtime_per_hour * 24
+    previous_runs_per_day = (
+        _PREVIOUS_RUNS_SOURCES * batches_per_tick * _PREVIOUS_RUNS_TICKS_PER_DAY
+    )
+    return {
+        "n_locations": n_locations,
+        "batches_per_tick": batches_per_tick,
+        "realtime_per_hour": realtime_per_hour,
+        "realtime_per_day": realtime_per_day,
+        "previous_runs_per_day": previous_runs_per_day,
+        "total_per_day": realtime_per_day + previous_runs_per_day,
+    }
+
+
+def print_quota_probe(
+    n_locations: int, warn_threshold: int = _DEFAULT_QUOTA_WARN_PER_DAY,
+) -> None:
+    est = projected_daily_api_calls(n_locations)
+    print("\n=== Open-Meteo quota probe (steady-state cron) ===")
+    print(f"  Locations:           {est['n_locations']:>8,}")
+    print(f"  Batches per tick:    {est['batches_per_tick']:>8,}  "
+          f"(capacity = {_MAX_LOCATIONS_PER_CALL}/call)")
+    print(f"  Realtime /hour:      {est['realtime_per_hour']:>8,}")
+    print(f"  Realtime /day:       {est['realtime_per_day']:>8,}")
+    print(f"  Previous Runs /day:  {est['previous_runs_per_day']:>8,}  "
+          f"({_PREVIOUS_RUNS_SOURCES} sources × {_PREVIOUS_RUNS_TICKS_PER_DAY} ticks)")
+    print(f"  ---")
+    print(f"  TOTAL /day:          {est['total_per_day']:>8,}  "
+          f"(warn threshold: {warn_threshold:,})")
+    if est["total_per_day"] > warn_threshold:
+        print(f"  ⚠️  WARNING: projected daily calls exceed {warn_threshold:,}. "
+              f"Check your Open-Meteo subscription quota.")
+
+
 def build_coverage_report(
     plants: pd.DataFrame,
     country_coords: dict[str, tuple[float, float, str]],
@@ -528,12 +584,15 @@ def main() -> int:
         for iso in sorted(by_c):
             if all(by_c[iso][t]["chosen_k"] == 0 for t in ("solar", "wind_onshore", "wind_offshore")):
                 print(f"  {iso} ({by_c[iso]['name']})")
+        print_quota_probe(len(locations))
         return 0
 
     write_locations_block(SCHEMA_PATH, locations)
     logger.info("Wrote LOCATIONS block → %s", SCHEMA_PATH)
     write_coverage_report(REPORT_PATH, report)
     logger.info("Wrote coverage report → %s", REPORT_PATH)
+
+    print_quota_probe(len(locations))
     return 0
 
 

@@ -44,6 +44,7 @@ from src import db
 from src.fetch_weather_observation import (
     LEAD_TIMES_HOURS,
     NWP_MODELS,
+    _get_all_locations,
     fetch_previous_runs,
 )
 
@@ -77,6 +78,12 @@ def parse_args() -> argparse.Namespace:
                    help=f"Comma-separated lead hours (default: {','.join(str(x) for x in LEAD_TIMES_HOURS)}).")
     p.add_argument("--chunk-days", type=int, default=DEFAULT_CHUNK_DAYS,
                    help=f"Days per API call (default: {DEFAULT_CHUNK_DAYS}).")
+    p.add_argument("--countries", default=None,
+                   help="Comma-separated country_code filter (e.g. 'BE,FR'). "
+                        "Default: all countries in weather_location.")
+    p.add_argument("--zone-type", default=None,
+                   help="Filter to one zone_type (e.g. 'centroid' for "
+                        "centroid-first staged rollout). Default: all.")
     p.add_argument("--dry-run", action="store_true",
                    help="Print the plan without calling the API.")
     return p.parse_args()
@@ -101,18 +108,43 @@ def main() -> int:
         fetched_at_dt = datetime.now(timezone.utc)
 
     chunks = list(_chunk_range(start_dt, end_dt, args.chunk_days))
-    total_calls = len(models) * len(leads) * len(chunks)
+
+    # Resolve the location subset ONCE so the plan/logging is accurate.
+    # With >50 locations, fetch_previous_runs will internally batch across
+    # multiple API calls per chunk — account for that in the call estimate.
+    from src.fetch_weather_observation import MAX_LOCATIONS_PER_CALL
+    countries = (tuple(args.countries.split(","))
+                 if args.countries else None)
+    if countries or args.zone_type:
+        locations = []
+        for c in (countries or [None]):
+            locations.extend(_get_all_locations(
+                zone_type_filter=args.zone_type, country_filter=c,
+            ))
+    else:
+        locations = _get_all_locations()
+    batches_per_chunk = max(
+        1, (len(locations) + MAX_LOCATIONS_PER_CALL - 1) // MAX_LOCATIONS_PER_CALL
+    )
+    total_calls = len(models) * len(leads) * len(chunks) * batches_per_chunk
 
     log.info("Backfill window: %s .. %s (chunk=%dd, %d chunks)",
              args.start, args.end, args.chunk_days, len(chunks))
     log.info("Models (%d): %s", len(models), ", ".join(models))
     log.info("Leads (%d): %s", len(leads), leads)
+    log.info("Locations: %d (zone_type=%s, countries=%s), %d batch(es)/chunk",
+             len(locations), args.zone_type or "all",
+             args.countries or "all", batches_per_chunk)
     log.info("fetched_at: %s", fetched_at_dt.isoformat(timespec="seconds"))
     log.info("Plan: %d API calls", total_calls)
 
     if args.dry_run:
         log.info("Dry run — exiting.")
         return 0
+
+    if not locations:
+        log.error("No locations match the filters — nothing to backfill.")
+        return 1
 
     summary: dict[str, int] = {}
     t0 = time.time()
@@ -136,6 +168,7 @@ def main() -> int:
                         start_date=chunk_start,
                         end_date=chunk_end,
                         fetched_at=fetched_at_dt,
+                        locations=locations,
                     )
                     rows_total += n
                     calls_ok += 1
