@@ -46,8 +46,10 @@ logger = logging.getLogger("entsoe_pipeline")
 
 COMMERCIAL_FORECAST_URL = "https://customer-api.open-meteo.com/v1/forecast"
 COMMERCIAL_PREVIOUS_RUNS_URL = "https://customer-previous-runs-api.open-meteo.com/v1/forecast"
+COMMERCIAL_ARCHIVE_URL = "https://customer-archive-api.open-meteo.com/v1/archive"
 FREE_FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 FREE_PREVIOUS_RUNS_URL = "https://previous-runs-api.open-meteo.com/v1/forecast"
+FREE_ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
 
 # Open-Meteo variable names (API-side) — subset of helio's requirements that
 # is available on Previous Runs. The 3 cloud-layer variants and the GTI
@@ -173,18 +175,47 @@ def _call_openmeteo(
     return None
 
 
-def _get_be_locations() -> list[dict]:
-    """Load the 5 BE rows from weather_location, ordered consistently."""
+# Open-Meteo accepts multiple locations per call via comma-joined lat/lon;
+# we cap each API call at this many to keep URLs reasonable and respect
+# the provider's per-call batching limits.
+MAX_LOCATIONS_PER_CALL = 50
+
+
+def _get_all_locations(
+    zone_type_filter: Optional[str] = None,
+    country_filter: Optional[str] = None,
+) -> list[dict]:
+    """Load rows from `weather_location`, optionally filtered.
+
+    Stable ordering (by ``location_id``) so batches are deterministic across
+    runs. Empty result is valid (caller logs a warning).
+
+    :param zone_type_filter: If given, only rows where ``zone_type = X``.
+    :param country_filter:   If given, only rows where ``country_code = X``.
+    """
+    clauses: list[str] = []
+    params: list = []
+    if zone_type_filter is not None:
+        clauses.append("zone_type = ?")
+        params.append(zone_type_filter)
+    if country_filter is not None:
+        clauses.append("country_code = ?")
+        params.append(country_filter)
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    sql = (
+        f"SELECT location_id, country_code, zone_id, zone_type, lat, lon "
+        f"FROM weather_location {where} ORDER BY location_id"
+    )
     with db.get_connection() as conn:
-        rows = conn.execute(
-            """
-            SELECT location_id, zone_id, lat, lon
-            FROM weather_location
-            WHERE country_code = 'BE'
-            ORDER BY location_id
-            """
-        ).fetchall()
+        rows = conn.execute(sql, params).fetchall()
     return [dict(r) for r in rows]
+
+
+def _batch_locations(
+    locations: list[dict], batch_size: int = MAX_LOCATIONS_PER_CALL,
+) -> list[list[dict]]:
+    """Split `locations` into contiguous chunks of up to `batch_size`."""
+    return [locations[i : i + batch_size] for i in range(0, len(locations), batch_size)]
 
 
 def _get_source_id(provider: str, model_id: str, lead_time_hours: int) -> int:
@@ -303,54 +334,67 @@ def fetch_realtime_forecast(
     forecast_days: int = 7,
     past_days: int = 1,
     fetched_at: Optional[datetime] = None,
+    locations: Optional[list[dict]] = None,
 ) -> int:
-    """Pull the real-time `/v1/forecast` endpoint for all 5 BE locations.
+    """Pull the real-time `/v1/forecast` endpoint for all `weather_location` rows.
 
     ``model_id`` selects the NWP source:
       - ``"best_match"``  — Open-Meteo's default (no ``models=`` param)
       - ``"ecmwf_ifs025"``, ``"icon_seamless"``, ``"gfs_seamless"`` — specific
 
-    Returns the number of rows inserted.
+    Locations are batched at ``MAX_LOCATIONS_PER_CALL`` to respect Open-Meteo's
+    per-call limits. ``locations`` override is for staged backfills (e.g.
+    centroid-first); default is all rows from `weather_location`.
+
+    Returns the total number of rows inserted across all batches.
     """
-    locations = _get_be_locations()
+    if locations is None:
+        locations = _get_all_locations()
     if not locations:
-        logger.warning("No BE locations in weather_location — did you init the schema?")
+        logger.warning("No locations in weather_location — did you init the schema?")
         return 0
 
     source_id = _get_source_id("open_meteo_forecast", model_id, -1)
     fetched_at_dt = fetched_at or datetime.now(timezone.utc)
     fetched_at_str = fetched_at_dt.isoformat(timespec="seconds")
 
-    params = {
-        "latitude": ",".join(str(loc["lat"]) for loc in locations),
-        "longitude": ",".join(str(loc["lon"]) for loc in locations),
-        "hourly": ",".join(OPENMETEO_VARIABLES_FORECAST),
-        "forecast_days": forecast_days,
-        "past_days": past_days,
-        "timezone": "UTC",
-        "wind_speed_unit": "ms",
-        "tilt": PANEL_TILT,
-        "azimuth": PANEL_AZIMUTH,
-    }
-    if model_id != "best_match":
-        params["models"] = model_id
+    total_inserted = 0
+    batches = _batch_locations(locations)
+    for batch_idx, batch in enumerate(batches, start=1):
+        params = {
+            "latitude": ",".join(str(loc["lat"]) for loc in batch),
+            "longitude": ",".join(str(loc["lon"]) for loc in batch),
+            "hourly": ",".join(OPENMETEO_VARIABLES_FORECAST),
+            "forecast_days": forecast_days,
+            "past_days": past_days,
+            "timezone": "UTC",
+            "wind_speed_unit": "ms",
+            "tilt": PANEL_TILT,
+            "azimuth": PANEL_AZIMUTH,
+        }
+        if model_id != "best_match":
+            params["models"] = model_id
 
-    data = _call_openmeteo(COMMERCIAL_FORECAST_URL, params)
-    if not data:
-        logger.error("fetch_realtime_forecast(%s): no data returned", model_id)
-        return 0
+        data = _call_openmeteo(COMMERCIAL_FORECAST_URL, params)
+        if not data:
+            logger.error(
+                "fetch_realtime_forecast(%s): batch %d/%d returned no data",
+                model_id, batch_idx, len(batches),
+            )
+            continue
 
-    rows = _parse_hourly_response(
-        data, locations, OPENMETEO_VARIABLES_FORECAST,
-        column_suffix="",
-        forecast_run_time=None,  # real-time API doesn't expose run time
-    )
-    inserted = _upsert_observations(rows, source_id, fetched_at_str)
+        rows = _parse_hourly_response(
+            data, batch, OPENMETEO_VARIABLES_FORECAST,
+            column_suffix="",
+            forecast_run_time=None,  # real-time API doesn't expose run time
+        )
+        total_inserted += _upsert_observations(rows, source_id, fetched_at_str)
+
     logger.info(
-        "fetch_realtime_forecast(%s): %d rows (fetched_at=%s)",
-        model_id, inserted, fetched_at_str,
+        "fetch_realtime_forecast(%s): %d rows across %d batch(es) (fetched_at=%s)",
+        model_id, total_inserted, len(batches), fetched_at_str,
     )
-    return inserted
+    return total_inserted
 
 
 # NWP models we fetch at real-time (every hour) — matches helio/heliocast
@@ -374,11 +418,15 @@ def fetch_previous_runs(
     start_date: str,
     end_date: str,
     fetched_at: Optional[datetime] = None,
+    locations: Optional[list[dict]] = None,
 ) -> int:
     """Pull Previous Runs API for one NWP model × one lead time.
 
-    ``lead_time_hours`` must be 24 or 72 (the two supported by the API
-    suffix convention `_previous_day1` / `_previous_day3`).
+    ``lead_time_hours`` must be 24, 48, or 72 — the three supported by the
+    API suffix convention (`_previous_day1` / `_previous_day2` / `_previous_day3`).
+
+    Locations are batched at ``MAX_LOCATIONS_PER_CALL``. ``locations`` override
+    is for staged backfills (centroid-first, per-country).
     """
     if lead_time_hours == 24:
         suffix = "_previous_day1"
@@ -392,7 +440,8 @@ def fetch_previous_runs(
     else:
         raise ValueError(f"Unsupported lead_time_hours: {lead_time_hours}")
 
-    locations = _get_be_locations()
+    if locations is None:
+        locations = _get_all_locations()
     if not locations:
         return 0
 
@@ -401,42 +450,120 @@ def fetch_previous_runs(
     fetched_at_str = fetched_at_dt.isoformat(timespec="seconds")
 
     suffixed_vars = [f"{v}{suffix}" for v in OPENMETEO_VARIABLES_PREVIOUS_RUNS]
-    params = {
-        "latitude": ",".join(str(loc["lat"]) for loc in locations),
-        "longitude": ",".join(str(loc["lon"]) for loc in locations),
-        "hourly": ",".join(suffixed_vars),
-        "start_date": start_date,
-        "end_date": end_date,
-        "timezone": "UTC",
-        "wind_speed_unit": "ms",
-        "tilt": PANEL_TILT,
-        "azimuth": PANEL_AZIMUTH,
-    }
-    if model_id != "best_match":
-        params["models"] = model_id
+    total_inserted = 0
+    batches = _batch_locations(locations)
+    for batch_idx, batch in enumerate(batches, start=1):
+        params = {
+            "latitude": ",".join(str(loc["lat"]) for loc in batch),
+            "longitude": ",".join(str(loc["lon"]) for loc in batch),
+            "hourly": ",".join(suffixed_vars),
+            "start_date": start_date,
+            "end_date": end_date,
+            "timezone": "UTC",
+            "wind_speed_unit": "ms",
+            "tilt": PANEL_TILT,
+            "azimuth": PANEL_AZIMUTH,
+        }
+        if model_id != "best_match":
+            params["models"] = model_id
 
-    data = _call_openmeteo(COMMERCIAL_PREVIOUS_RUNS_URL, params)
-    if not data:
-        logger.error(
-            "fetch_previous_runs: no data returned for model=%s lead=%d %s..%s",
-            model_id, lead_time_hours, start_date, end_date,
+        data = _call_openmeteo(COMMERCIAL_PREVIOUS_RUNS_URL, params)
+        if not data:
+            logger.error(
+                "fetch_previous_runs(%s, %dh): batch %d/%d returned no data for %s..%s",
+                model_id, lead_time_hours, batch_idx, len(batches), start_date, end_date,
+            )
+            continue
+
+        rows = _parse_hourly_response(
+            data, batch, OPENMETEO_VARIABLES_PREVIOUS_RUNS,
+            column_suffix=suffix,
+            # forecast_run_time is approximated as valid_at - lead_time on insert
+            # since Open-Meteo doesn't expose the NWP init time; set None here
+            # and leave the column NULL.
+            forecast_run_time=None,
         )
+        total_inserted += _upsert_observations(rows, source_id, fetched_at_str)
+
+    logger.info(
+        "fetch_previous_runs(%s, %dh): %d rows across %d batch(es) for %s..%s (fetched_at=%s)",
+        model_id, lead_time_hours, total_inserted, len(batches),
+        start_date, end_date, fetched_at_str,
+    )
+    return total_inserted
+
+
+# ---------------------------------------------------------------------------
+# ERA5 archive (historical truth)
+# ---------------------------------------------------------------------------
+
+
+def fetch_archive_era5(
+    start_date: str,
+    end_date: str,
+    fetched_at: Optional[datetime] = None,
+    locations: Optional[list[dict]] = None,
+) -> int:
+    """Pull ERA5 reanalysis via Open-Meteo Archive API for a date range.
+
+    ERA5 is the "historical truth" source — authoritative realized weather
+    for validating NWP forecasts. Open-Meteo's archive goes back to 1940-01-01
+    at hourly resolution. Locations are batched at ``MAX_LOCATIONS_PER_CALL``.
+
+    ``start_date`` / ``end_date`` are ISO date strings (YYYY-MM-DD), inclusive.
+    Uses the `open_meteo_archive` / `era5` source (lead_time_hours=0).
+
+    Returns the total rows inserted. Idempotent with the same ``fetched_at``
+    (re-runs skip via the weather_observation primary key).
+    """
+    if locations is None:
+        locations = _get_all_locations()
+    if not locations:
+        logger.warning("fetch_archive_era5: no locations in weather_location")
         return 0
 
-    rows = _parse_hourly_response(
-        data, locations, OPENMETEO_VARIABLES_PREVIOUS_RUNS,
-        column_suffix=suffix,
-        # forecast_run_time is approximated as valid_at - lead_time on insert
-        # since Open-Meteo doesn't expose the NWP init time; set None here
-        # and leave the column NULL.
-        forecast_run_time=None,
-    )
-    inserted = _upsert_observations(rows, source_id, fetched_at_str)
+    source_id = _get_source_id("open_meteo_archive", "era5", 0)
+    fetched_at_dt = fetched_at or datetime.now(timezone.utc)
+    fetched_at_str = fetched_at_dt.isoformat(timespec="seconds")
+
+    # Archive API exposes the same variable names as /v1/forecast (no suffix)
+    # but the cloud-layer breakdown and GTI aren't consistently available on
+    # reanalysis — use the Previous Runs subset, which IS in ERA5.
+    total_inserted = 0
+    batches = _batch_locations(locations)
+    for batch_idx, batch in enumerate(batches, start=1):
+        params = {
+            "latitude": ",".join(str(loc["lat"]) for loc in batch),
+            "longitude": ",".join(str(loc["lon"]) for loc in batch),
+            "hourly": ",".join(OPENMETEO_VARIABLES_PREVIOUS_RUNS),
+            "start_date": start_date,
+            "end_date": end_date,
+            "timezone": "UTC",
+            "wind_speed_unit": "ms",
+            "tilt": PANEL_TILT,
+            "azimuth": PANEL_AZIMUTH,
+            "models": "era5",
+        }
+        data = _call_openmeteo(COMMERCIAL_ARCHIVE_URL, params)
+        if not data:
+            logger.error(
+                "fetch_archive_era5: batch %d/%d returned no data for %s..%s",
+                batch_idx, len(batches), start_date, end_date,
+            )
+            continue
+
+        rows = _parse_hourly_response(
+            data, batch, OPENMETEO_VARIABLES_PREVIOUS_RUNS,
+            column_suffix="",
+            forecast_run_time=None,  # N/A for reanalysis
+        )
+        total_inserted += _upsert_observations(rows, source_id, fetched_at_str)
+
     logger.info(
-        "fetch_previous_runs(%s, %dh): %d rows inserted for %s..%s (fetched_at=%s)",
-        model_id, lead_time_hours, inserted, start_date, end_date, fetched_at_str,
+        "fetch_archive_era5: %d rows across %d batch(es) for %s..%s (fetched_at=%s)",
+        total_inserted, len(batches), start_date, end_date, fetched_at_str,
     )
-    return inserted
+    return total_inserted
 
 
 # ---------------------------------------------------------------------------
