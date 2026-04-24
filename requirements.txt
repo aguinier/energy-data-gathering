@@ -36,3 +36,7 @@ tqdm==4.66.1
 
 # Testing
 pytest>=7.0
+
+# Phase 2 — build_weather_locations: GEM xlsx reader + adaptive k-means
+openpyxl>=3.1
+scikit-learn>=1.3

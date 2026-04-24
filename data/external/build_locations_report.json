@@ -1,0 +1,764 @@
+{
+  "generated_at_utc": "2026-04-24T08:05:32.068992+00:00",
+  "total_locations": 337,
+  "gem_wind_file": "Global-Wind-Power-Tracker-February-2026.xlsx",
+  "gem_solar_file": "Global-Solar-Power-Tracker-February-2026.xlsx",
+  "by_country": {
+    "AL": {
+      "name": "Albania",
+      "solar": {
+        "n_plants": 22,
+        "total_capacity_mw": 354.2,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_onshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      },
+      "wind_offshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      }
+    },
+    "AT": {
+      "name": "Austria",
+      "solar": {
+        "n_plants": 214,
+        "total_capacity_mw": 858.4,
+        "chosen_k": 2,
+        "fell_back_to_country": false
+      },
+      "wind_onshore": {
+        "n_plants": 129,
+        "total_capacity_mw": 3090.0,
+        "chosen_k": 3,
+        "fell_back_to_country": false
+      },
+      "wind_offshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      }
+    },
+    "BA": {
+      "name": "Bosnia and Herzegovina",
+      "solar": {
+        "n_plants": 75,
+        "total_capacity_mw": 539.5,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_onshore": {
+        "n_plants": 5,
+        "total_capacity_mw": 244.0,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_offshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      }
+    },
+    "BE": {
+      "name": "Belgium",
+      "solar": {
+        "n_plants": 220,
+        "total_capacity_mw": 905.1,
+        "chosen_k": 2,
+        "fell_back_to_country": false
+      },
+      "wind_onshore": {
+        "n_plants": 101,
+        "total_capacity_mw": 1710.0,
+        "chosen_k": 2,
+        "fell_back_to_country": false
+      },
+      "wind_offshore": {
+        "n_plants": 11,
+        "total_capacity_mw": 2256.0,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      }
+    },
+    "BG": {
+      "name": "Bulgaria",
+      "solar": {
+        "n_plants": 442,
+        "total_capacity_mw": 3529.0,
+        "chosen_k": 5,
+        "fell_back_to_country": false
+      },
+      "wind_onshore": {
+        "n_plants": 20,
+        "total_capacity_mw": 608.0,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_offshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      }
+    },
+    "CH": {
+      "name": "Switzerland",
+      "solar": {
+        "n_plants": 53,
+        "total_capacity_mw": 96.7,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_onshore": {
+        "n_plants": 4,
+        "total_capacity_mw": 55.0,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_offshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      }
+    },
+    "CY": {
+      "name": "Cyprus",
+      "solar": {
+        "n_plants": 105,
+        "total_capacity_mw": 395.9,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_onshore": {
+        "n_plants": 5,
+        "total_capacity_mw": 156.0,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_offshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      }
+    },
+    "CZ": {
+      "name": "Czechia",
+      "solar": {
+        "n_plants": 733,
+        "total_capacity_mw": 2813.8,
+        "chosen_k": 2,
+        "fell_back_to_country": false
+      },
+      "wind_onshore": {
+        "n_plants": 8,
+        "total_capacity_mw": 151.0,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_offshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      }
+    },
+    "DE": {
+      "name": "Germany",
+      "solar": {
+        "n_plants": 7825,
+        "total_capacity_mw": 38026.1,
+        "chosen_k": 15,
+        "fell_back_to_country": false
+      },
+      "wind_onshore": {
+        "n_plants": 2126,
+        "total_capacity_mw": 41510.2,
+        "chosen_k": 15,
+        "fell_back_to_country": false
+      },
+      "wind_offshore": {
+        "n_plants": 32,
+        "total_capacity_mw": 9026.0,
+        "chosen_k": 8,
+        "fell_back_to_country": false
+      }
+    },
+    "DK": {
+      "name": "Denmark",
+      "solar": {
+        "n_plants": 230,
+        "total_capacity_mw": 3383.9,
+        "chosen_k": 5,
+        "fell_back_to_country": false
+      },
+      "wind_onshore": {
+        "n_plants": 116,
+        "total_capacity_mw": 2350.7,
+        "chosen_k": 2,
+        "fell_back_to_country": false
+      },
+      "wind_offshore": {
+        "n_plants": 16,
+        "total_capacity_mw": 2652.6,
+        "chosen_k": 4,
+        "fell_back_to_country": false
+      }
+    },
+    "EE": {
+      "name": "Estonia",
+      "solar": {
+        "n_plants": 190,
+        "total_capacity_mw": 1045.6,
+        "chosen_k": 2,
+        "fell_back_to_country": false
+      },
+      "wind_onshore": {
+        "n_plants": 15,
+        "total_capacity_mw": 688.0,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_offshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      }
+    },
+    "ES": {
+      "name": "Spain",
+      "solar": {
+        "n_plants": 2591,
+        "total_capacity_mw": 36230.7,
+        "chosen_k": 2,
+        "fell_back_to_country": false
+      },
+      "wind_onshore": {
+        "n_plants": 1011,
+        "total_capacity_mw": 30987.1,
+        "chosen_k": 15,
+        "fell_back_to_country": false
+      },
+      "wind_offshore": {
+        "n_plants": 1,
+        "total_capacity_mw": 20.0,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      }
+    },
+    "FI": {
+      "name": "Finland",
+      "solar": {
+        "n_plants": 28,
+        "total_capacity_mw": 219.4,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_onshore": {
+        "n_plants": 154,
+        "total_capacity_mw": 8509.4,
+        "chosen_k": 7,
+        "fell_back_to_country": false
+      },
+      "wind_offshore": {
+        "n_plants": 1,
+        "total_capacity_mw": 42.0,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      }
+    },
+    "FR": {
+      "name": "France",
+      "solar": {
+        "n_plants": 2125,
+        "total_capacity_mw": 12894.7,
+        "chosen_k": 15,
+        "fell_back_to_country": false
+      },
+      "wind_onshore": {
+        "n_plants": 1321,
+        "total_capacity_mw": 23614.7,
+        "chosen_k": 15,
+        "fell_back_to_country": false
+      },
+      "wind_offshore": {
+        "n_plants": 5,
+        "total_capacity_mw": 1995.0,
+        "chosen_k": 2,
+        "fell_back_to_country": false
+      }
+    },
+    "GB": {
+      "name": "United Kingdom",
+      "solar": {
+        "n_plants": 1300,
+        "total_capacity_mw": 11126.2,
+        "chosen_k": 5,
+        "fell_back_to_country": false
+      },
+      "wind_onshore": {
+        "n_plants": 374,
+        "total_capacity_mw": 13002.2,
+        "chosen_k": 12,
+        "fell_back_to_country": false
+      },
+      "wind_offshore": {
+        "n_plants": 49,
+        "total_capacity_mw": 15963.0,
+        "chosen_k": 8,
+        "fell_back_to_country": false
+      }
+    },
+    "GR": {
+      "name": "Greece",
+      "solar": {
+        "n_plants": 3357,
+        "total_capacity_mw": 5978.2,
+        "chosen_k": 7,
+        "fell_back_to_country": false
+      },
+      "wind_onshore": {
+        "n_plants": 213,
+        "total_capacity_mw": 4705.6,
+        "chosen_k": 4,
+        "fell_back_to_country": false
+      },
+      "wind_offshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      }
+    },
+    "HR": {
+      "name": "Croatia",
+      "solar": {
+        "n_plants": 68,
+        "total_capacity_mw": 271.6,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_onshore": {
+        "n_plants": 27,
+        "total_capacity_mw": 1095.0,
+        "chosen_k": 2,
+        "fell_back_to_country": false
+      },
+      "wind_offshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      }
+    },
+    "HU": {
+      "name": "Hungary",
+      "solar": {
+        "n_plants": 795,
+        "total_capacity_mw": 4061.1,
+        "chosen_k": 5,
+        "fell_back_to_country": false
+      },
+      "wind_onshore": {
+        "n_plants": 11,
+        "total_capacity_mw": 319.0,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_offshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      }
+    },
+    "IE": {
+      "name": "Ireland",
+      "solar": {
+        "n_plants": 35,
+        "total_capacity_mw": 927.1,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_onshore": {
+        "n_plants": 135,
+        "total_capacity_mw": 4356.1,
+        "chosen_k": 5,
+        "fell_back_to_country": false
+      },
+      "wind_offshore": {
+        "n_plants": 1,
+        "total_capacity_mw": 25.0,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      }
+    },
+    "IT": {
+      "name": "Italy",
+      "solar": {
+        "n_plants": 1140,
+        "total_capacity_mw": 5404.4,
+        "chosen_k": 9,
+        "fell_back_to_country": false
+      },
+      "wind_onshore": {
+        "n_plants": 352,
+        "total_capacity_mw": 10410.3,
+        "chosen_k": 6,
+        "fell_back_to_country": false
+      },
+      "wind_offshore": {
+        "n_plants": 1,
+        "total_capacity_mw": 30.0,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      }
+    },
+    "LT": {
+      "name": "Lithuania",
+      "solar": {
+        "n_plants": 136,
+        "total_capacity_mw": 871.6,
+        "chosen_k": 2,
+        "fell_back_to_country": false
+      },
+      "wind_onshore": {
+        "n_plants": 27,
+        "total_capacity_mw": 1308.0,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_offshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      }
+    },
+    "LU": {
+      "name": "Luxembourg",
+      "solar": {
+        "n_plants": 45,
+        "total_capacity_mw": 101.1,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_onshore": {
+        "n_plants": 8,
+        "total_capacity_mw": 131.6,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_offshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      }
+    },
+    "LV": {
+      "name": "Latvia",
+      "solar": {
+        "n_plants": 85,
+        "total_capacity_mw": 585.3,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_onshore": {
+        "n_plants": 3,
+        "total_capacity_mw": 100.0,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_offshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      }
+    },
+    "MD": {
+      "name": "Moldova",
+      "solar": {
+        "n_plants": 47,
+        "total_capacity_mw": 165.7,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_onshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      },
+      "wind_offshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      }
+    },
+    "ME": {
+      "name": "Montenegro",
+      "solar": {
+        "n_plants": 4,
+        "total_capacity_mw": 16.9,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_onshore": {
+        "n_plants": 2,
+        "total_capacity_mw": 118.0,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_offshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      }
+    },
+    "MK": {
+      "name": "North Macedonia",
+      "solar": {
+        "n_plants": 91,
+        "total_capacity_mw": 440.2,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_onshore": {
+        "n_plants": 2,
+        "total_capacity_mw": 73.0,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_offshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      }
+    },
+    "NL": {
+      "name": "Netherlands",
+      "solar": {
+        "n_plants": 748,
+        "total_capacity_mw": 6897.1,
+        "chosen_k": 4,
+        "fell_back_to_country": false
+      },
+      "wind_onshore": {
+        "n_plants": 163,
+        "total_capacity_mw": 5186.1,
+        "chosen_k": 4,
+        "fell_back_to_country": false
+      },
+      "wind_offshore": {
+        "n_plants": 22,
+        "total_capacity_mw": 6836.0,
+        "chosen_k": 3,
+        "fell_back_to_country": false
+      }
+    },
+    "NO": {
+      "name": "Norway",
+      "solar": {
+        "n_plants": 10,
+        "total_capacity_mw": 35.8,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_onshore": {
+        "n_plants": 62,
+        "total_capacity_mw": 5665.4,
+        "chosen_k": 3,
+        "fell_back_to_country": false
+      },
+      "wind_offshore": {
+        "n_plants": 6,
+        "total_capacity_mw": 138.0,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      }
+    },
+    "PL": {
+      "name": "Poland",
+      "solar": {
+        "n_plants": 4744,
+        "total_capacity_mw": 8926.5,
+        "chosen_k": 15,
+        "fell_back_to_country": false
+      },
+      "wind_onshore": {
+        "n_plants": 260,
+        "total_capacity_mw": 8962.5,
+        "chosen_k": 11,
+        "fell_back_to_country": false
+      },
+      "wind_offshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      }
+    },
+    "PT": {
+      "name": "Portugal",
+      "solar": {
+        "n_plants": 174,
+        "total_capacity_mw": 3550.9,
+        "chosen_k": 2,
+        "fell_back_to_country": false
+      },
+      "wind_onshore": {
+        "n_plants": 203,
+        "total_capacity_mw": 5046.1,
+        "chosen_k": 3,
+        "fell_back_to_country": false
+      },
+      "wind_offshore": {
+        "n_plants": 1,
+        "total_capacity_mw": 25.0,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      }
+    },
+    "RO": {
+      "name": "Romania",
+      "solar": {
+        "n_plants": 475,
+        "total_capacity_mw": 3613.0,
+        "chosen_k": 5,
+        "fell_back_to_country": false
+      },
+      "wind_onshore": {
+        "n_plants": 77,
+        "total_capacity_mw": 5484.0,
+        "chosen_k": 3,
+        "fell_back_to_country": false
+      },
+      "wind_offshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      }
+    },
+    "RS": {
+      "name": "Serbia",
+      "solar": {
+        "n_plants": 38,
+        "total_capacity_mw": 199.2,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_onshore": {
+        "n_plants": 8,
+        "total_capacity_mw": 604.1,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_offshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      }
+    },
+    "SE": {
+      "name": "Sweden",
+      "solar": {
+        "n_plants": 100,
+        "total_capacity_mw": 663.1,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_onshore": {
+        "n_plants": 277,
+        "total_capacity_mw": 16385.8,
+        "chosen_k": 13,
+        "fell_back_to_country": false
+      },
+      "wind_offshore": {
+        "n_plants": 3,
+        "total_capacity_mw": 188.0,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      }
+    },
+    "SI": {
+      "name": "Slovenia",
+      "solar": {
+        "n_plants": 39,
+        "total_capacity_mw": 93.6,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_onshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      },
+      "wind_offshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      }
+    },
+    "SK": {
+      "name": "Slovakia",
+      "solar": {
+        "n_plants": 235,
+        "total_capacity_mw": 890.4,
+        "chosen_k": 2,
+        "fell_back_to_country": false
+      },
+      "wind_onshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      },
+      "wind_offshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      }
+    },
+    "UA": {
+      "name": "Ukraine",
+      "solar": {
+        "n_plants": 524,
+        "total_capacity_mw": 5687.7,
+        "chosen_k": 7,
+        "fell_back_to_country": false
+      },
+      "wind_onshore": {
+        "n_plants": 17,
+        "total_capacity_mw": 560.4,
+        "chosen_k": 1,
+        "fell_back_to_country": true
+      },
+      "wind_offshore": {
+        "n_plants": 0,
+        "total_capacity_mw": 0.0,
+        "chosen_k": 0,
+        "fell_back_to_country": false
+      }
+    }
+  }
+}
