@@ -123,9 +123,13 @@ def test_check_locations_dimension_detects_missing_db_row(
     seeded_observation_db,
 ) -> None:
     cursor = seeded_observation_db.cursor()
-    cursor.execute("DELETE FROM weather_location WHERE zone_id = 'east'")
+    # Delete the BE centroid row — centroid exists for every country in LOCATIONS
+    # so this test stays stable as the autogen block regenerates.
+    cursor.execute(
+        "DELETE FROM weather_location WHERE country_code = 'BE' AND zone_id = 'centroid'"
+    )
     seeded_observation_db.commit()
 
     drift = check_locations_dimension(seeded_observation_db)
-    assert drift["only_in_schema"] == {("BE", "east", "solar")}
+    assert drift["only_in_schema"] == {("BE", "centroid", "centroid")}
     assert drift["only_in_db"] == set()
