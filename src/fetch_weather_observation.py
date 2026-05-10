@@ -218,6 +218,69 @@ def _batch_locations(
     return [locations[i : i + batch_size] for i in range(0, len(locations), batch_size)]
 
 
+# Coverage bbox per regional NWP model. Open-Meteo's batch API rejects
+# the entire batch with HTTP 400 + "No data is available for this
+# location" if any one location is outside the model's regional grid
+# (failure mode discovered 2026-04-24 when phase2 multi-country expanded
+# weather_location to include Iberia/Greece, which fall outside KNMI
+# HARMONIE-AROME and Météo-France AROME). Filter to in-bbox locations
+# before batching so out-of-domain points don't poison the whole batch.
+#
+# Models not listed here are global (best_match, ecmwf_ifs025,
+# icon_seamless, gfs_seamless) — pass-through, no filter.
+REGIONAL_MODEL_COVERAGE: dict[str, dict[str, float]] = {
+    # KNMI HARMONIE-AROME Europe — 5.5 km grid. Open-Meteo's served
+    # domain is tighter than the published "Europe" — boundary probing
+    # 2026-05-10 against /v1/forecast (HTTP 200/400) gave: south=41-42°N
+    # (lat 42 ok at lon -2; lat 41 fails at lon -5), north=65-66°N (65
+    # ok, 66.5 fails), west=-10°E (ok), east=21-25°E (ok at lat 47/lon
+    # 21; fails at lat 45/lon 25 and lat 50/lon 30). Bbox below is
+    # rectangular and conservative — drops far-eastern Europe + south
+    # Iberia/Italy/Greece, keeps Belgium / FR / DE / GB / IE / NL / DK
+    # / Nordics / PL / CZ / SK / HU / AT / CH / north Italy / Slovenia.
+    "knmi_harmonie_arome_europe": {
+        "lat_min": 42.0, "lat_max": 65.0,
+        "lon_min": -12.0, "lon_max": 22.0,
+    },
+    # Météo-France AROME — Open-Meteo's `meteofrance_arome_france` actually
+    # serves a wider Western-Europe domain than the published 1.3 km France
+    # grid. Probe results 2026-05-10: south=37-38°N (lat 38 ok at lon -3,
+    # lat 37 fails), north=56-57°N (55 ok, 57 fails), east=12-15°E (12 ok
+    # at lat 50, 15 fails), west=at least -10°E. Bbox covers FR / BE / NL
+    # / DE-west / GB / IE / north Iberia / north Italy / Switzerland.
+    "meteofrance_arome_france": {
+        "lat_min": 38.0, "lat_max": 56.0,
+        "lon_min": -10.0, "lon_max": 13.0,
+    },
+    # DWD ICON-D2 (2.2 km, central Europe) is intentionally NOT filtered:
+    # probing 2026-05-10 showed it serves a much wider domain than the
+    # published grid (lat 60 / lon 25 still respond 200), and the
+    # pre-fix logs showed only 1 of 7 batches failing — i.e. just a few
+    # corner locations are out-of-domain. Adding a tight bbox here
+    # would risk dropping legitimate locations; leaving it out keeps
+    # the existing 6/7 batch success rate intact.
+}
+
+
+def _filter_locations_by_model(
+    locations: list[dict], model_id: str,
+) -> list[dict]:
+    """Drop locations outside ``model_id``'s regional coverage bbox.
+
+    Returns a new list; does not mutate ``locations``. Global models
+    (any ``model_id`` not in :data:`REGIONAL_MODEL_COVERAGE`) are
+    pass-through.
+    """
+    bbox = REGIONAL_MODEL_COVERAGE.get(model_id)
+    if bbox is None:
+        return list(locations)
+    return [
+        loc for loc in locations
+        if bbox["lat_min"] <= loc["lat"] <= bbox["lat_max"]
+        and bbox["lon_min"] <= loc["lon"] <= bbox["lon_max"]
+    ]
+
+
 def _get_source_id(provider: str, model_id: str, lead_time_hours: int) -> int:
     """Look up the source_id for a (provider, model, lead) triple."""
     with db.get_connection() as conn:
@@ -354,6 +417,20 @@ def fetch_realtime_forecast(
         logger.warning("No locations in weather_location — did you init the schema?")
         return 0
 
+    n_before = len(locations)
+    locations = _filter_locations_by_model(locations, model_id)
+    if len(locations) != n_before:
+        logger.info(
+            "fetch_realtime_forecast(%s): filtered %d -> %d locations (out-of-domain dropped)",
+            model_id, n_before, len(locations),
+        )
+    if not locations:
+        logger.info(
+            "fetch_realtime_forecast(%s): no in-domain locations — skipping",
+            model_id,
+        )
+        return 0
+
     source_id = _get_source_id("open_meteo_forecast", model_id, -1)
     fetched_at_dt = fetched_at or datetime.now(timezone.utc)
     fetched_at_str = fetched_at_dt.isoformat(timespec="seconds")
@@ -443,6 +520,20 @@ def fetch_previous_runs(
     if locations is None:
         locations = _get_all_locations()
     if not locations:
+        return 0
+
+    n_before = len(locations)
+    locations = _filter_locations_by_model(locations, model_id)
+    if len(locations) != n_before:
+        logger.info(
+            "fetch_previous_runs(%s, %dh): filtered %d -> %d locations (out-of-domain dropped)",
+            model_id, lead_time_hours, n_before, len(locations),
+        )
+    if not locations:
+        logger.info(
+            "fetch_previous_runs(%s, %dh): no in-domain locations — skipping",
+            model_id, lead_time_hours,
+        )
         return 0
 
     source_id = _get_source_id("open_meteo_previous_runs", model_id, provider_lead)

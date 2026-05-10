@@ -11,7 +11,9 @@ import pytest
 
 from src.fetch_weather_observation import (
     MAX_LOCATIONS_PER_CALL,
+    REGIONAL_MODEL_COVERAGE,
     _batch_locations,
+    _filter_locations_by_model,
     _get_all_locations,
 )
 
@@ -66,6 +68,85 @@ def test_batch_locations_preserves_order() -> None:
     batches = _batch_locations(locs, batch_size=50)
     flat = [loc for batch in batches for loc in batch]
     assert [loc["location_id"] for loc in flat] == list(range(120))
+
+
+# ---------------------------------------------------------------------------
+# _filter_locations_by_model — per-model regional bbox filter
+# ---------------------------------------------------------------------------
+
+
+def test_filter_locations_by_model_global_models_pass_through() -> None:
+    """best_match + ECMWF/ICON-seamless/GFS are global, no filter applied."""
+    locs = [
+        {"location_id": 1, "lat": 50.5, "lon": 4.45},   # Belgium
+        {"location_id": 2, "lat": 36.581, "lon": -5.5},  # Southern Spain
+        {"location_id": 3, "lat": 65.0, "lon": 25.0},    # Northern Finland
+    ]
+    for model_id in ("best_match", "ecmwf_ifs025", "icon_seamless", "gfs_seamless"):
+        assert _filter_locations_by_model(locs, model_id) == locs
+
+
+def test_filter_locations_by_model_knmi_drops_southern_iberia() -> None:
+    """The actual failure mode discovered 2026-04-24."""
+    in_domain = {"location_id": 1, "lat": 50.5, "lon": 4.45}    # Belgium
+    out_domain = {"location_id": 2, "lat": 36.581, "lon": -5.5}  # Southern Spain
+    result = _filter_locations_by_model(
+        [in_domain, out_domain], "knmi_harmonie_arome_europe"
+    )
+    assert result == [in_domain]
+
+
+def test_filter_locations_by_model_meteofrance_drops_far_east_and_far_south() -> None:
+    """MF AROME's served domain is wider than mainland France — Belgium and
+    Berlin both work. The actual boundaries are around 38-56°N, -10-13°E."""
+    in_france = {"location_id": 1, "lat": 47.0, "lon": 2.0}    # Central France
+    in_belgium = {"location_id": 2, "lat": 50.5, "lon": 4.45}  # Brussels — works
+    out_east = {"location_id": 3, "lat": 50.0, "lon": 15.0}    # Czech Rep — fails
+    out_south = {"location_id": 4, "lat": 36.0, "lon": -5.0}   # S Spain — fails
+    out_north = {"location_id": 5, "lat": 58.0, "lon": 5.0}    # Norway — fails
+    result = _filter_locations_by_model(
+        [in_france, in_belgium, out_east, out_south, out_north],
+        "meteofrance_arome_france",
+    )
+    assert result == [in_france, in_belgium]
+
+
+def test_filter_locations_by_model_icon_d2_pass_through() -> None:
+    """ICON-D2 serves a wide domain in practice and is intentionally not
+    filtered — only ~1/7 batches fail, not worth a tight bbox that risks
+    dropping legitimate locations."""
+    locs = [
+        {"location_id": 1, "lat": 52.5, "lon": 13.4},  # Berlin
+        {"location_id": 2, "lat": 40.4, "lon": -3.7},  # Madrid
+        {"location_id": 3, "lat": 60.0, "lon": 10.7},  # Oslo
+    ]
+    assert _filter_locations_by_model(locs, "icon_d2") == locs
+
+
+def test_filter_locations_by_model_empty_when_all_out_of_domain() -> None:
+    """If filter excludes all locations, return empty list (caller will skip the model)."""
+    locs = [{"location_id": 1, "lat": 36.0, "lon": -5.0}]  # Southern Spain
+    assert _filter_locations_by_model(locs, "knmi_harmonie_arome_europe") == []
+
+
+def test_filter_locations_by_model_does_not_mutate_input() -> None:
+    locs = [{"location_id": 1, "lat": 50.0, "lon": 4.0}]
+    original = list(locs)
+    _filter_locations_by_model(locs, "knmi_harmonie_arome_europe")
+    assert locs == original
+
+
+def test_filter_locations_by_model_unknown_model_pass_through() -> None:
+    """Models not in REGIONAL_MODEL_COVERAGE get no filter (safe default)."""
+    locs = [{"location_id": 1, "lat": 36.0, "lon": -5.0}]
+    assert _filter_locations_by_model(locs, "some_future_model") == locs
+
+
+def test_regional_model_coverage_has_expected_models() -> None:
+    """Guard against accidental removal of known regional models."""
+    assert "knmi_harmonie_arome_europe" in REGIONAL_MODEL_COVERAGE
+    assert "meteofrance_arome_france" in REGIONAL_MODEL_COVERAGE
+    # ICON-D2 deliberately omitted — see comment in REGIONAL_MODEL_COVERAGE
 
 
 # ---------------------------------------------------------------------------
