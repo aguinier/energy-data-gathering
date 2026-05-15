@@ -493,6 +493,41 @@ _EXTRA_LOCATIONS: list[tuple] = [
     ('BE' , 'solar_zip_08'          , 'solar_zip_v1',  50.498,   4.597,  0.059,   479.9, 'Belgium solar_zip_v1 cluster (Charleroi / Namur), 480 MW across 53 zips'),
     ('BE' , 'solar_zip_09'          , 'solar_zip_v1',  50.605,   3.968,  0.049,   400.7, 'Belgium solar_zip_v1 cluster (Mons / Hainaut), 401 MW across 30 zips'),
     ('BE' , 'solar_zip_10'          , 'solar_zip_v1',  49.902,   5.502,  0.016,   133.2, 'Belgium solar_zip_v1 cluster (Luxembourg / Bastogne), 133 MW across 21 zips'),
+
+    # ------------------------------------------------------------------
+    # v035 grid cells — top-25 cells by v030 gain importance (SW-Belgium
+    # concentration). Added 2026-05-15 to feed heliocast's v035 daily
+    # Predico submission (production/scheduler.py). Each cell is a 0.1°
+    # square; coords here are the cell centroids.
+    # Weights are total_gain_v030 / sum(gain) — informational; the v035
+    # model uses cells independently (no aggregation).
+    # Source: heliocast/production/grid_cells.json.
+    # ------------------------------------------------------------------
+    ('BE' , 'g044'                  , 'solar_grid_v035',  50.450,   3.750, 0.1161,   12.20, 'Belgium solar_grid_v035 cell  1/25 (lat 50.45, lon 3.75, 2 zips, 12.2 MW capacity, gain 67300)'),
+    ('BE' , 'g103'                  , 'solar_grid_v035',  50.750,   3.850, 0.0778,   22.35, 'Belgium solar_grid_v035 cell  2/25 (lat 50.75, lon 3.85, 1 zips, 22.4 MW capacity, gain 45089)'),
+    ('BE' , 'g031'                  , 'solar_grid_v035',  50.350,   3.850, 0.0706,    8.93, 'Belgium solar_grid_v035 cell  3/25 (lat 50.35, lon 3.85, 1 zips, 8.9 MW capacity, gain 40930)'),
+    ('BE' , 'g046'                  , 'solar_grid_v035',  50.450,   3.950, 0.0652,   64.15, 'Belgium solar_grid_v035 cell  4/25 (lat 50.45, lon 3.95, 4 zips, 64.2 MW capacity, gain 37773)'),
+    ('BE' , 'g117'                  , 'solar_grid_v035',  50.850,   2.850, 0.0543,  101.08, 'Belgium solar_grid_v035 cell  5/25 (lat 50.85, lon 2.85, 1 zips, 101.1 MW capacity, gain 31470)'),
+    ('BE' , 'g066'                  , 'solar_grid_v035',  50.550,   3.650, 0.0539,   18.05, 'Belgium solar_grid_v035 cell  6/25 (lat 50.55, lon 3.65, 1 zips, 18.1 MW capacity, gain 31245)'),
+    ('BE' , 'g045'                  , 'solar_grid_v035',  50.450,   3.850, 0.0445,   18.74, 'Belgium solar_grid_v035 cell  7/25 (lat 50.45, lon 3.85, 3 zips, 18.7 MW capacity, gain 25806)'),
+    ('BE' , 'g002'                  , 'solar_grid_v035',  49.550,   5.850, 0.0419,   11.52, 'Belgium solar_grid_v035 cell  8/25 (lat 49.55, lon 5.85, 1 zips, 11.5 MW capacity, gain 24290)'),
+    ('BE' , 'g179'                  , 'solar_grid_v035',  51.050,   5.750, 0.0415,   31.01, 'Belgium solar_grid_v035 cell  9/25 (lat 51.05, lon 5.75, 2 zips, 31.0 MW capacity, gain 24054)'),
+    ('BE' , 'g102'                  , 'solar_grid_v035',  50.750,   3.650, 0.0402,   21.98, 'Belgium solar_grid_v035 cell 10/25 (lat 50.75, lon 3.65, 1 zips, 22.0 MW capacity, gain 23294)'),
+    ('BE' , 'g208'                  , 'solar_grid_v035',  51.250,   3.150, 0.0390,   12.23, 'Belgium solar_grid_v035 cell 11/25 (lat 51.25, lon 3.15, 1 zips, 12.2 MW capacity, gain 22600)'),
+    ('BE' , 'g099'                  , 'solar_grid_v035',  50.750,   2.950, 0.0366,   17.11, 'Belgium solar_grid_v035 cell 12/25 (lat 50.75, lon 2.95, 2 zips, 17.1 MW capacity, gain 21188)'),
+    ('BE' , 'g141'                  , 'solar_grid_v035',  50.950,   3.350, 0.0330,  119.97, 'Belgium solar_grid_v035 cell 13/25 (lat 50.95, lon 3.35, 3 zips, 120.0 MW capacity, gain 19152)'),
+    ('BE' , 'g098'                  , 'solar_grid_v035',  50.650,   6.150, 0.0289,   34.42, 'Belgium solar_grid_v035 cell 14/25 (lat 50.65, lon 6.15, 1 zips, 34.4 MW capacity, gain 16744)'),
+    ('BE' , 'g223'                  , 'solar_grid_v035',  51.350,   3.350, 0.0279,    3.70, 'Belgium solar_grid_v035 cell 15/25 (lat 51.35, lon 3.35, 1 zips, 3.7 MW capacity, gain 16149)'),
+    ('BE' , 'g001'                  , 'solar_grid_v035',  49.550,   5.550, 0.0272,    4.10, 'Belgium solar_grid_v035 cell 16/25 (lat 49.55, lon 5.55, 1 zips, 4.1 MW capacity, gain 15778)'),
+    ('BE' , 'g047'                  , 'solar_grid_v035',  50.450,   4.050, 0.0243,    9.63, 'Belgium solar_grid_v035 cell 17/25 (lat 50.45, lon 4.05, 2 zips, 9.6 MW capacity, gain 14099)'),
+    ('BE' , 'g221'                  , 'solar_grid_v035',  51.350,   3.150, 0.0232,   25.00, 'Belgium solar_grid_v035 cell 18/25 (lat 51.35, lon 3.15, 1 zips, 25.0 MW capacity, gain 13449)'),
+    ('BE' , 'g205'                  , 'solar_grid_v035',  51.150,   5.650, 0.0232,   14.59, 'Belgium solar_grid_v035 cell 19/25 (lat 51.15, lon 5.65, 1 zips, 14.6 MW capacity, gain 13445)'),
+    ('BE' , 'g157'                  , 'solar_grid_v035',  50.950,   5.650, 0.0231,    6.42, 'Belgium solar_grid_v035 cell 20/25 (lat 50.95, lon 5.65, 1 zips, 6.4 MW capacity, gain 13396)'),
+    ('BE' , 'g115'                  , 'solar_grid_v035',  50.750,   5.750, 0.0227,   35.18, 'Belgium solar_grid_v035 cell 21/25 (lat 50.75, lon 5.75, 2 zips, 35.2 MW capacity, gain 13151)'),
+    ('BE' , 'g006'                  , 'solar_grid_v035',  49.650,   5.750, 0.0218,   12.24, 'Belgium solar_grid_v035 cell 22/25 (lat 49.65, lon 5.75, 1 zips, 12.2 MW capacity, gain 12651)'),
+    ('BE' , 'g116'                  , 'solar_grid_v035',  50.750,   5.950, 0.0217,    9.00, 'Belgium solar_grid_v035 cell 23/25 (lat 50.75, lon 5.95, 1 zips, 9.0 MW capacity, gain 12554)'),
+    ('BE' , 'g137'                  , 'solar_grid_v035',  50.950,   2.750, 0.0208,   28.11, 'Belgium solar_grid_v035 cell 24/25 (lat 50.95, lon 2.75, 1 zips, 28.1 MW capacity, gain 12063)'),
+    ('BE' , 'g043'                  , 'solar_grid_v035',  50.350,   6.150, 0.0205,    4.78, 'Belgium solar_grid_v035 cell 25/25 (lat 50.35, lon 6.15, 1 zips, 4.8 MW capacity, gain 11908)'),
 ]
 
 LOCATIONS = LOCATIONS + _EXTRA_LOCATIONS
