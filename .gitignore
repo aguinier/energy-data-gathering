@@ -27,3 +27,6 @@ nul
 
 # Claude
 .claude/
+
+# Superpowers SDD scratch (ledger, briefs, reports)
+.superpowers/
