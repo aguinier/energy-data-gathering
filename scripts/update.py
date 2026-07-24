@@ -107,7 +107,7 @@ def main():
 
     # Parse data types
     if args.types == 'all':
-        data_types = ['load', 'price', 'renewable', 'load_forecast_day_ahead', 'load_forecast_week_ahead', 'wind_solar_forecast']
+        data_types = ['load', 'price', 'renewable', 'load_forecast_day_ahead', 'load_forecast_week_ahead', 'wind_solar_forecast', 'crossborder_flows', 'net_position']
     else:
         data_types = [t.strip() for t in args.types.split(',')]
 
