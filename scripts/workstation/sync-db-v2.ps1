@@ -3,15 +3,21 @@
     Daily workstation replica sync v2 — full coverage.
 
 .DESCRIPTION
-    Stage 1  weather_observation: rowid-watermark incremental pull (unchanged
-             from sync-db-incremental.ps1). ~340 GB table, append-only.
+    Stage 1  weather_observation ONLY: rowid-watermark incremental pull, the
+             same delta-CTAS + rowid-preserving merge mechanism as
+             sync-db-incremental.ps1. Unlike that script, this stage does NOT
+             also upsert the weather_location / weather_source dimension
+             tables - those are now ordinary prod tables, so they are covered
+             by Stage 2's generic full refresh below instead. ~340 GB table,
+             append-only.
     Stage 2  every other table: full refresh. Prod exports all tables from
              sqlite_master EXCEPT weather_observation into a transfer DB
              (CTAS via read-only attach) together with their original DDL;
              locally each table is dropped and rebuilt from that DDL inside
              one transaction, then indexes are recreated. ~15M rows / 1-3 GB
              total - cheap, and immune to schema drift: new prod tables
-             appear on the replica automatically.
+             (including weather_location and weather_source) appear on the
+             replica automatically.
 
     CAVEATS
       - A prod VACUUM renumbers rowids and invalidates the weather watermark
@@ -93,7 +99,17 @@ print(f'DELTA_ROWS={n}')
         $deltaRows = [int64](($exportOut | Select-String '^DELTA_ROWS=(\d+)').Matches.Groups[1].Value)
 
         if ($deltaRows -gt 0) {
-            Write-Host "[$(& $Stamp)] Transferring weather delta ($deltaRows rows) ..."
+            $deltaBytes = [int64]((ssh $Target "stat -c %s $RemoteDelta").Trim())
+            if ($LASTEXITCODE -ne 0) { throw "Remote stat failed (exit $LASTEXITCODE)" }
+
+            # local free-space pre-flight for the delta (mirrors sync-db-incremental.ps1)
+            $localDriveName = (Get-Item (Split-Path $LocalDb -Parent)).PSDrive.Name
+            $freeBytes = (Get-PSDrive -Name $localDriveName).Free
+            if ($freeBytes -lt ($deltaBytes * 1.10)) {
+                throw "Not enough free space on ${localDriveName}: for delta ($([math]::Round($deltaBytes/1GB,1)) GB) - have $([math]::Round($freeBytes/1GB,1)) GB"
+            }
+
+            Write-Host "[$(& $Stamp)] Transferring weather delta ($deltaRows rows, $([math]::Round($deltaBytes/1GB,2)) GB) ..."
             if (Test-Path $LocalDelta) { Remove-Item $LocalDelta -Force }
             scp "${Target}:$RemoteDelta" $LocalDelta
             if ($LASTEXITCODE -ne 0) { throw "scp failed (exit $LASTEXITCODE)" }
@@ -156,7 +172,8 @@ for name, sql in tables:
 dst.commit(); dst.close()
 print(f'REFRESH_TABLES={len(tables)}')
 "@
-        ssh $Target "rm -f $RemoteRefresh $RemoteRefresh-wal $RemoteRefresh-shm" | Out-Null
+        ssh $Target "set -e; mkdir -p $RemoteTmpDir; rm -f $RemoteRefresh $RemoteRefresh-wal $RemoteRefresh-shm" | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Remote prep failed" }
         $refOut = Invoke-ProdPython $py2
         $refOut | ForEach-Object { Write-Host "  $_" }
 
