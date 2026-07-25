@@ -14,6 +14,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY config.py utils.py ./
 COPY src/ src/
 COPY scripts/ scripts/
+# Tests ship too: pytest is already a runtime dependency (requirements.txt) and
+# the container is the only environment with the full dependency set, so this is
+# where `python -m pytest tests/` can actually run against real deps.
+COPY tests/ tests/
 
 # Install crontab: 00:30, 06:30, 13:30, 18:30
 COPY docker/crontab /etc/cron.d/energy-data

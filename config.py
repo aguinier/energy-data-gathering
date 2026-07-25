@@ -124,13 +124,17 @@ ENTSOE_API_CONFIG = {
         'description': 'Physical electricity flows between interconnected countries (MW)',
     },
     'net_position': {
-        'name': 'Realized Net Position',
+        # DAY-AHEAD, not realized: fetch_net_position calls the client with
+        # dayahead=True. Published per BIDDING ZONE, which is not always the
+        # 2-letter code -- DE maps to DE_LU (the Core CCR zone covering DE+LU);
+        # see ENTSOEClient.NET_POSITION_BIDDING_ZONES.
+        'name': 'Day-Ahead Net Position',
         'document_type': 'A25',
         'process_type': None,
         'table': 'net_position',
         'value_column': 'net_position_mw',
         'entsoe_method': 'query_net_position',
-        'description': 'Aggregated import/export balance per country (MW). Positive = exporter.',
+        'description': 'Day-ahead net position per bidding zone (MW). Positive = exporter.',
     },
 }
 

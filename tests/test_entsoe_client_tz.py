@@ -39,7 +39,7 @@ class _StubInner:
         self.seen: dict[str, pd.Timestamp] = {}
 
     def query_net_position(self, country_code, start, end, dayahead=True):
-        self.seen = {"start": start, "end": end}
+        self.seen = {"start": start, "end": end, "country_code": country_code}
         idx = pd.date_range(start, periods=2, freq="h")
         return pd.Series([100.0, 200.0], index=idx)
 
@@ -67,6 +67,25 @@ def test_net_position_accepts_naive_and_aware(client, start, end):
     assert series is not None and not series.empty
     # Whatever came in, the inner client must receive UTC-aware timestamps.
     assert str(client.client.seen["start"].tz) == "UTC"
+
+
+def test_net_position_maps_de_to_de_lu(client):
+    """Germany's net position is published under the DE_LU bidding zone (which is
+    also the Core CCR zone for DE+LU). Querying plain 'DE' returns
+    NoMatchingDataError, which is why DE was the only Core country with no
+    net_position data. Verified against the live API 2026-07-25:
+    DE -> NoMatchingDataError, DE_LU -> 192 points.
+    """
+    client.query_net_position_data("DE", NAIVE_START, NAIVE_END)
+
+    assert client.client.seen["country_code"] == "DE_LU"
+
+
+def test_net_position_leaves_unmapped_zones_alone(client):
+    """Only zones in the mapping are rewritten; everything else passes through."""
+    client.query_net_position_data("BE", NAIVE_START, NAIVE_END)
+
+    assert client.client.seen["country_code"] == "BE"
 
 
 @pytest.mark.parametrize("start,end", [

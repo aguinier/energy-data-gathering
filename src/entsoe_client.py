@@ -1244,9 +1244,11 @@ class ENTSOEClient:
             start_ts = pd.Timestamp(start).tz_convert('UTC') if hasattr(start, 'tzinfo') and start.tzinfo else pd.Timestamp(start, tz='UTC')
             end_ts = pd.Timestamp(end).tz_convert('UTC') if hasattr(end, 'tzinfo') and end.tzinfo else pd.Timestamp(end, tz='UTC')
 
+            zone = self.NET_POSITION_BIDDING_ZONES.get(country_code, country_code)
+
             self._rate_limit()
             series = self.client.query_net_position(
-                country_code, start=start_ts, end=end_ts, dayahead=dayahead
+                zone, start=start_ts, end=end_ts, dayahead=dayahead
             )
 
             if series is None or series.empty:
@@ -1265,6 +1267,20 @@ class ENTSOEClient:
     # ========================================================================
     # HELPER METHODS
     # ========================================================================
+
+    # Bidding zone mappings for NET POSITION queries.
+    # Net positions are published per bidding zone, which is not always the
+    # 2-letter country code. Germany's is DE_LU (the Core CCR bidding zone
+    # covering DE + LU) -- querying plain 'DE' raises NoMatchingDataError, which
+    # left DE as the only Core country with no net_position data.
+    # Deliberately SEPARATE from PRICE_BIDDING_ZONES: a price zone is not
+    # automatically the right net-position zone (e.g. prices map IT -> IT_NORD,
+    # which would be wrong for a national net position). Add entries here only
+    # when verified against the API.
+    NET_POSITION_BIDDING_ZONES = {
+        'DE': 'DE_LU',   # verified 2026-07-25: DE fails, DE_LU returns data
+        'LU': 'DE_LU',   # LU is inside the DE_LU bidding zone
+    }
 
     # Bidding zone mappings for price data
     # Some countries use different bidding zones for price vs load data
