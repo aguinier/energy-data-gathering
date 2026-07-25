@@ -1166,8 +1166,8 @@ class ENTSOEClient:
         from entsoe.mappings import NEIGHBOURS
 
         try:
-            start_ts = pd.Timestamp(start, tz="UTC")
-            end_ts = pd.Timestamp(end, tz="UTC")
+            start_ts = pd.Timestamp(start).tz_convert('UTC') if hasattr(start, 'tzinfo') and start.tzinfo else pd.Timestamp(start, tz='UTC')
+            end_ts = pd.Timestamp(end).tz_convert('UTC') if hasattr(end, 'tzinfo') and end.tzinfo else pd.Timestamp(end, tz='UTC')
 
             # Find all neighbors via NEIGHBOURS mapping
             # For multi-zone countries, collect neighbors from all zones
@@ -1241,8 +1241,8 @@ class ENTSOEClient:
             pd.Series with timestamp index and MW values. None if no data.
         """
         try:
-            start_ts = pd.Timestamp(start, tz="UTC")
-            end_ts = pd.Timestamp(end, tz="UTC")
+            start_ts = pd.Timestamp(start).tz_convert('UTC') if hasattr(start, 'tzinfo') and start.tzinfo else pd.Timestamp(start, tz='UTC')
+            end_ts = pd.Timestamp(end).tz_convert('UTC') if hasattr(end, 'tzinfo') and end.tzinfo else pd.Timestamp(end, tz='UTC')
 
             self._rate_limit()
             series = self.client.query_net_position(
