@@ -73,10 +73,10 @@ could run them. One `COPY tests/ tests/` fixed it; suite runs in-container (6 pa
 
 ## Open items
 
-- **DE backfill** (2023→now via DE_LU) was launched detached at the end of the session.
-  Verify: `docker exec energy-data-gathering tail -5 /app/logs/backfill_de_netpos.log`
-  and expect DE to reach ~31k rows like its peers. Then the next 07:00 sync brings it
-  to the workstation and DE joins the forecast set (18 → 19 countries).
+- **DE backfill: DONE** — 31,270 records, 0 errors, 2023-01-01 → 2026-07-26 (its Core
+  peers have 31,246). Remaining step is automatic: the next 07:00 `able-db-sync` brings
+  DE to the workstation replica, after which the 08:00 forecast should cover **19**
+  countries instead of 18. Worth confirming that count on the next run.
 - **Data anomalies, uninvestigated** (all pre-date this session's bugs):
   - GR **and** IE net position both stop **2026-03-14** — same date, so likely one
     cause (zone/mapping change?) rather than coincidence.
