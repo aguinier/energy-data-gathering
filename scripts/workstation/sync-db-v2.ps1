@@ -224,7 +224,11 @@ con.execute('DETACH d'); con.close()
 }
 finally {
     Write-Host "[$(& $Stamp)] Cleanup"
-    ssh $Target "rm -f $RemoteDelta $RemoteDelta-wal $RemoteDelta-shm $RemoteRefresh $RemoteRefresh-wal $RemoteRefresh-shm" 2>$null | Out-Null
+    # BatchMode + timeouts: a prompt or a stalled connection here used to hang
+    # the whole run forever. The task is MultipleInstances=IgnoreNew, so a hung
+    # instance silently cancels every later run.
+    $sshOpts = @('-o','BatchMode=yes','-o','ConnectTimeout=10','-o','ServerAliveInterval=5','-o','ServerAliveCountMax=3')
+    ssh @sshOpts $Target "rm -f $RemoteDelta $RemoteDelta-wal $RemoteDelta-shm $RemoteRefresh $RemoteRefresh-wal $RemoteRefresh-shm" 2>$null | Out-Null
     foreach ($f in @($LocalDelta, "$LocalDelta-wal", "$LocalDelta-shm", $LocalRefresh, "$LocalRefresh-wal", "$LocalRefresh-shm")) {
         if (Test-Path $f) { Remove-Item $f -Force }
     }
