@@ -23,6 +23,15 @@
       - A prod VACUUM renumbers rowids and invalidates the weather watermark
         -> full re-seed with the old sync-db-from-prod.ps1 required.
       - Replica-purity: this script is the ONLY writer to the replica.
+      - Since 2026-07-26 the scheduled task runs -TablesOnly and the replica
+        has NO weather_observation table: it was 325 GB of the 333 GB replica
+        (868M rows + 3 indexes bigger than the table) and nothing on the
+        workstation reads it - the dashboard now talks to prod's API, and
+        energy-forecast never referenced it. The replica is ~4.6 GB.
+        Dropping -TablesOnly will NOT work as-is: Stage 1 needs a rowid
+        watermark and throws on the missing table. Re-seed with
+        sync-db-from-prod.ps1 first, and check free disk - weather grew the
+        replica by roughly 10 GB/day.
 
 .EXAMPLE
     powershell -File sync-db-v2.ps1            # both stages
