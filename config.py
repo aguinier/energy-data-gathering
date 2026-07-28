@@ -135,6 +135,12 @@ ENTSOE_API_CONFIG = {
         'value_column': 'net_position_mw',
         'entsoe_method': 'query_net_position',
         'description': 'Day-ahead net position per bidding zone (MW). Positive = exporter.',
+        # Without this the pipeline caps the fetch window at now (pipeline.py's
+        # `fetch_end = end` branch), so the D+1 market-coupling result -- the
+        # whole point of an A25 day-ahead document -- was never requested. The
+        # series stopped at the current hour and the dashboard had nothing to
+        # show for tomorrow.
+        'is_dayahead': True  # Flag to indicate this data type supports D+1 fetching
     },
 }
 
