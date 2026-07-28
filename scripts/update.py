@@ -113,12 +113,21 @@ def main():
 
     logger.info(f"Data types: {', '.join(data_types)}")
 
-    # Auto-enable day-ahead fetching for price and forecast types
-    # These are published ~12:00 CET for D+1, so we should always fetch tomorrow's data
-    dayahead_types = {'price', 'load_forecast_day_ahead', 'wind_solar_forecast'}
-    if dayahead_types & set(data_types):
+    # Auto-enable day-ahead fetching when any selected type is published ahead
+    # of delivery (~12:00 CET for D+1), so we always fetch tomorrow's data.
+    #
+    # Read the set from config rather than repeating it here. This used to be a
+    # hardcoded literal, which meant a type could be flagged is_dayahead in
+    # config and still be fetched with a now-capped window when selected on its
+    # own (e.g. `--types net_position`) -- the flag is only consulted after this
+    # block has already decided include_dayahead.
+    dayahead_types = set(config.get_dayahead_data_types())
+    selected_dayahead = dayahead_types & set(data_types)
+    if selected_dayahead:
         args.include_dayahead = True
-        logger.info("Auto-enabled D+1 fetching for day-ahead data types")
+        logger.info(
+            "Auto-enabled D+1 fetching for: %s", ', '.join(sorted(selected_dayahead))
+        )
 
     # Parse countries
     if args.countries.lower() == 'all':
