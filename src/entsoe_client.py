@@ -11,7 +11,7 @@ Wraps the entsoe-py library with:
 import time
 import logging
 from datetime import datetime
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 import pandas as pd
 import pytz
 import xml.etree.ElementTree as ET
@@ -1103,6 +1103,13 @@ class ENTSOEClient:
         response) must derive the renewable frame from this method's output
         rather than calling both query methods.
 
+        Unlike query_generation_per_type_with_metadata (which only ever
+        keeps 'Actual Aggregated' and drops 'Actual Consumption' -- fine for
+        energy_renewable, which never claimed signed values), this method
+        nets the two into a single signed value per type via
+        _net_generation_consumption -- see that method's docstring for the
+        sign convention. That is why hydro_pumped_mw can be negative here.
+
         Args:
             country_code: ISO 2-letter country code
             start: Start datetime (UTC)
@@ -1112,7 +1119,8 @@ class ENTSOEClient:
             Tuple of (dataframe, publication_timestamp).
             - DataFrame with one column per energy_generation column
               (config.GENERATION_COLUMN_MAP), NaN where a type is absent --
-              never 0 for an absent type.
+              never 0 for an absent type. hydro_pumped_mw and any other
+              store-like type may be negative (net consumption).
             - Publication timestamp when ENTSO-E created the data.
             Both are None if no data available.
         """
@@ -1150,17 +1158,7 @@ class ENTSOEClient:
 
             # Handle MultiIndex columns (production type, data type)
             if isinstance(df.columns, pd.MultiIndex):
-                # Flatten MultiIndex: prefer 'Actual Aggregated' over 'Actual Consumption'
-                new_columns = {}
-                for col in df.columns:
-                    prod_type, data_type = col
-                    # Skip consumption data (e.g., Hydro Pumped Storage consumption)
-                    if 'Consumption' in data_type:
-                        continue
-                    # Use just the production type as column name
-                    if prod_type not in new_columns:
-                        new_columns[prod_type] = df[col]
-                df = pd.DataFrame(new_columns, index=df.index)
+                df = self._net_generation_consumption(df)
 
             # Reset index to make timestamp a column
             df = df.reset_index()
@@ -1185,6 +1183,67 @@ class ENTSOEClient:
         except Exception as e:
             logger.error(f"Error querying full generation data for {country_code}: {utils.format_error(e)}")
             return None, None
+
+    def _net_generation_consumption(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Flatten the (production_type, data_type) MultiIndex ENTSO-E returns
+        for A75 into one signed column per production type.
+
+        ENTSO-E reports up to two sub-series per type: 'Actual Aggregated'
+        (generation) and 'Actual Consumption' (only for types that can also
+        act as a load -- pumped storage pumping, battery charging). Keeping
+        only 'Actual Aggregated' (as query_generation_per_type_with_metadata
+        does, and must keep doing -- energy_renewable is frozen) is wrong
+        for this "complete document" table for two reasons:
+          - it discards the consumption reading entirely, so a country that
+            is net *consuming* on a store (e.g. FR pumped storage pumping
+            ~320 MW) reads as a net generator instead of a net load.
+          - a production type that -- for this window -- only ever reported
+            'Actual Consumption' (observed for FR Fossil Hard coal) vanishes
+            from the output completely instead of showing up as a negative
+            value.
+
+        Sign convention, per production type and per timestamp:
+          - both sub-series present  -> Aggregated - Consumption
+          - only Aggregated present  -> Aggregated
+          - only Consumption present -> -Consumption (a real net-load
+            measurement, not a missing value -- hydro_pumped_mw's whole
+            reason for being its own column is that it can be negative)
+          - neither present at a given timestamp -> NaN, never coerced to 0
+
+        Args:
+            df: DataFrame from entsoe-py with a 2-level MultiIndex columns
+                (production_type, data_type) and a timestamp index.
+
+        Returns:
+            DataFrame with a flat Index of production_type column names,
+            same timestamp index, one signed value per type per timestamp.
+        """
+        by_prod_type: Dict[str, Dict[str, pd.Series]] = {}
+        for prod_type, data_type in df.columns:
+            by_prod_type.setdefault(prod_type, {})[data_type] = df[(prod_type, data_type)]
+
+        new_columns = {}
+        for prod_type, series_by_data_type in by_prod_type.items():
+            aggregated = series_by_data_type.get('Actual Aggregated')
+            consumption = series_by_data_type.get('Actual Consumption')
+            if aggregated is not None and consumption is not None:
+                # Series.subtract(other, fill_value=0) substitutes 0 for a
+                # side that's missing AT A GIVEN TIMESTAMP only when the
+                # other side has a real value there; if both sides are NaN
+                # at a timestamp the result stays NaN. This is what keeps a
+                # genuinely-missing interval from being coerced to 0 -- a
+                # bare df.fillna(0) across the frame would destroy exactly
+                # that distinction.
+                new_columns[prod_type] = aggregated.subtract(consumption, fill_value=0)
+            elif aggregated is not None:
+                new_columns[prod_type] = aggregated
+            elif consumption is not None:
+                new_columns[prod_type] = -consumption
+            # else: unreachable -- prod_type only enters by_prod_type when
+            # at least one of its sub-series was present in df.columns.
+
+        return pd.DataFrame(new_columns, index=df.index)
 
     def _map_renewable_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """
