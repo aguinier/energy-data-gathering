@@ -219,6 +219,78 @@ def create_net_position_table():
     logger.info("net_position table created/verified")
 
 
+def create_generation_table():
+    """Create energy_generation table for the complete A75 document.
+
+    Unlike energy_renewable (8 renewable columns, folded, DEFAULT 0),
+    energy_generation holds one column per ENTSO-E production type -- the
+    full document A75 already returns with psr_type=None -- including
+    nuclear and fossil types that energy_renewable's mapping discards.
+
+    No column here has DEFAULT 0. A production type a country does not
+    report must read NULL, not 0 -- 0 is a measurement claim (e.g. solar at
+    night), NULL is "we don't know / not reported". See config.py's
+    GENERATION_COLUMN_MAP and entsoe_client.py's _map_generation_columns,
+    which never fillna(0) for this table.
+
+    hydro_pumped_mw is its own column here, unlike energy_renewable which
+    folds Hydro Pumped Storage into hydro_reservoir_mw -- pumped storage is
+    a store (can be negative), not a source, and keeping it separate is
+    part of why this table exists.
+
+    energy_renewable's schema, mapping and values are unchanged by this.
+    """
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS energy_generation (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                country_code TEXT NOT NULL,
+                timestamp_utc TIMESTAMP NOT NULL,
+
+                -- renewables (same semantics as energy_renewable, repeated so this
+                -- table holds the whole A75 document and needs no join to be useful)
+                solar_mw REAL,
+                wind_onshore_mw REAL,
+                wind_offshore_mw REAL,
+                hydro_run_mw REAL,
+                hydro_reservoir_mw REAL,
+                hydro_pumped_mw REAL,
+                biomass_mw REAL,
+                geothermal_mw REAL,
+                marine_mw REAL,
+                other_renewable_mw REAL,
+                energy_storage_mw REAL,
+
+                -- everything the old renewable-only mapping discarded
+                nuclear_mw REAL,
+                fossil_gas_mw REAL,
+                fossil_hard_coal_mw REAL,
+                fossil_brown_coal_mw REAL,
+                fossil_oil_mw REAL,
+                fossil_oil_shale_mw REAL,
+                fossil_peat_mw REAL,
+                fossil_coal_derived_gas_mw REAL,
+                waste_mw REAL,
+                other_mw REAL,
+
+                data_quality TEXT DEFAULT 'actual',
+                fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                publication_timestamp_utc TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_generation_country_time
+            ON energy_generation(country_code, timestamp_utc)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_generation_time
+            ON energy_generation(timestamp_utc)
+        """)
+        conn.commit()
+    logger.info("energy_generation table created/verified")
+
+
 def create_weather_observation_tables():
     """Create the versioned weather observation tables + seed dimensions.
 
