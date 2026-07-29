@@ -731,6 +731,100 @@ def upsert_renewable_data(
     return records_affected, 0
 
 
+def upsert_generation_data(
+    df: pd.DataFrame,
+    country_code: str,
+    publication_timestamp: Optional[datetime] = None,
+) -> Tuple[int, int]:
+    """
+    Insert or update the complete A75 generation document (energy_generation).
+
+    Unlike upsert_renewable_data, this does NOT default a missing column to
+    0.0 -- a production type absent from `df` (or NaN for a given row) must
+    round-trip to SQL NULL, never 0. 0 is a measurement claim (e.g. solar at
+    night); NULL is "not reported". See create_generation_table()'s
+    docstring and entsoe_client._map_generation_columns, which produces the
+    NaN this function must not coerce away.
+
+    Binding a bare float('nan') to a sqlite3 REAL parameter already comes
+    back as NULL on SELECT -- SQLite itself has no NaN storage class and
+    silently substitutes NULL at the C-API level. This function does not
+    rely on that alone: it explicitly converts NaN -> None before binding,
+    so the NULL-not-zero behaviour is visible in this code, not just an
+    incidental side effect of SQLite internals a future reader might not
+    know about.
+
+    Args:
+        df: DataFrame with a timestamp_utc column and up to one column per
+            config.get_generation_columns() (NaN where a type is absent --
+            see entsoe_client._map_generation_columns)
+        country_code: ISO 2-letter country code
+        publication_timestamp: When ENTSO-E published this data (optional)
+
+    Returns:
+        Tuple of (records_inserted, records_updated)
+    """
+    if df.empty:
+        logger.warning(f"Empty DataFrame for generation data, country {country_code}")
+        return 0, 0
+
+    # Validate DataFrame has timestamp
+    utils.validate_dataframe(df, ["timestamp_utc"])
+
+    # Convert timestamps to string format for SQLite
+    df = df.copy()
+    df["timestamp_utc"] = df["timestamp_utc"].apply(
+        lambda x: utils.format_timestamp_for_db(x) if pd.notna(x) else None
+    )
+
+    # Ensure every energy_generation column exists -- NaN default, NOT 0.0.
+    # This is the one line most likely to regress this table's entire
+    # reason for existing if "aligned" with upsert_renewable_data's
+    # `df[col] = 0.0`.
+    generation_cols = config.get_generation_columns()
+    for col in generation_cols:
+        if col not in df.columns:
+            df[col] = float("nan")
+
+    # Format publication timestamp if provided
+    pub_time_str = None
+    if publication_timestamp:
+        pub_time_str = utils.format_timestamp_for_db(publication_timestamp)
+
+    def _null_if_nan(value):
+        """NaN -> None so sqlite3 binds NULL, not a stored NaN float."""
+        return None if pd.isna(value) else value
+
+    columns_sql = ", ".join(generation_cols)
+    placeholders_sql = ", ".join(["?"] * len(generation_cols))
+
+    records_affected = 0
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+
+        for _, row in df.iterrows():
+            cursor.execute(
+                f"""
+                INSERT OR REPLACE INTO energy_generation
+                (country_code, timestamp_utc, {columns_sql},
+                 data_quality, publication_timestamp_utc, fetched_at)
+                VALUES (?, ?, {placeholders_sql}, ?, ?, CURRENT_TIMESTAMP)
+                """,
+                (
+                    country_code,
+                    row["timestamp_utc"],
+                    *[_null_if_nan(row.get(col)) for col in generation_cols],
+                    config.DATA_QUALITY_ACTUAL,
+                    pub_time_str,
+                ),
+            )
+            records_affected += cursor.rowcount
+
+    logger.info(f"Upserted {records_affected} generation records for {country_code}")
+    return records_affected, 0
+
+
 def upsert_weather_data(df: pd.DataFrame, country_code: str) -> Tuple[int, int]:
     """
     Insert or update weather data

@@ -1184,6 +1184,139 @@ class ENTSOEClient:
             logger.error(f"Error querying full generation data for {country_code}: {utils.format_error(e)}")
             return None, None
 
+    def query_generation_and_renewable_with_metadata(
+        self,
+        country_code: str,
+        start: datetime,
+        end: datetime
+    ) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[datetime]]:
+        """
+        Fetch the A75 document ONCE and derive BOTH output frames from that
+        single response -- this is the entry point fetch_renewable.py uses so
+        energy_generation and energy_renewable are never filled by two
+        separate ENTSO-E requests for the same country/window.
+
+        This makes exactly the same two _make_request calls
+        query_generation_all_types_with_metadata already makes on its own
+        (raw_client.query_generation for the publication timestamp,
+        client.query_generation for the structured frame) -- it does not add
+        a third or fourth call, and it deliberately does NOT call
+        query_generation_per_type_with_metadata or
+        query_generation_all_types_with_metadata itself, since either would
+        double the request count for the same window.
+
+        Two independent flattens run over the SAME fetched MultiIndex frame,
+        because the two output tables have different, both-correct upstream
+        semantics and neither can be derived from the other's output:
+          - energy_renewable (via _flatten_prefer_aggregated ->
+            _map_renewable_columns) reproduces the PRE-netting behaviour
+            query_generation_per_type_with_metadata has always had: prefer
+            'Actual Aggregated', silently drop 'Actual Consumption'. This is
+            required, not incidental -- energy_renewable is frozen, and
+            netting Hydro Pumped Storage's Consumption side in (the way
+            energy_generation does) would change hydro_reservoir_mw's folded
+            value. Deriving energy_renewable from the ALREADY-netted
+            energy_generation frame instead of from this pre-netting flatten
+            would silently break that freeze -- see
+            tests/test_generation_mapping.py's
+            test_derived_renewable_frame_matches_old_path_across_all_shapes.
+          - energy_generation (via _net_generation_consumption ->
+            _map_generation_columns) keeps the signed net-of-consumption
+            behaviour query_generation_all_types_with_metadata introduced --
+            this table's reason for existing is to show what the renewable-only
+            mapping discarded, sign included.
+
+        Args:
+            country_code: ISO 2-letter country code
+            start: Start datetime (UTC)
+            end: End datetime (UTC)
+
+        Returns:
+            Tuple of (generation_df, renewable_df, publication_timestamp).
+            - generation_df: identical in shape/semantics to what
+              query_generation_all_types_with_metadata produces (NaN where a
+              type is absent, signed where a type nets to consumption).
+            - renewable_df: byte-identical to what
+              query_generation_per_type_with_metadata produces from the same
+              underlying document.
+            All three are None if no data is available.
+        """
+        try:
+            # Get country ENTSO-E domain
+            country = self._get_country_domain(country_code)
+
+            # Convert to pandas Timestamps (required by entsoe-py)
+            start_ts = pd.Timestamp(start).tz_convert('UTC') if hasattr(start, 'tzinfo') and start.tzinfo else pd.Timestamp(start, tz='UTC')
+            end_ts = pd.Timestamp(end).tz_convert('UTC') if hasattr(end, 'tzinfo') and end.tzinfo else pd.Timestamp(end, tz='UTC')
+
+            # Fetch raw XML first to extract publication timestamp -- the
+            # ONE request to raw_client.query_generation for this window.
+            raw_xml = self._make_request(
+                self.raw_client.query_generation,
+                country['entsoe_domain'],
+                start=start_ts,
+                end=end_ts,
+                psr_type=None  # Get all production types
+            )
+
+            # Extract publication timestamp from XML
+            publication_time = self._extract_publication_timestamp(raw_xml)
+
+            # The ONE request to client.query_generation for this window --
+            # both output frames below are derived from this single
+            # response, never fetched twice.
+            df = self._make_request(
+                self.client.query_generation,
+                country['entsoe_domain'],
+                start=start_ts,
+                end=end_ts,
+                psr_type=None  # Get all production types
+            )
+
+            if df is None or df.empty:
+                raise ENTSOENoDataError("No generation data returned")
+
+            # Two independent flattens of the SAME MultiIndex frame -- see
+            # docstring for why neither can be derived from the other.
+            if isinstance(df.columns, pd.MultiIndex):
+                df_old_flatten = self._flatten_prefer_aggregated(df)
+                df_netted = self._net_generation_consumption(df)
+            else:
+                # No MultiIndex means entsoe-py already returned a single
+                # production type with a flat column -- there is no
+                # Aggregated/Consumption ambiguity to resolve, so both paths
+                # see the same frame (mirrors the "no MultiIndex" branch both
+                # query_generation_per_type_with_metadata and
+                # query_generation_all_types_with_metadata already have).
+                df_old_flatten = df
+                df_netted = df
+
+            df_old_flatten = self._finalize_flat_frame(df_old_flatten)
+            df_netted = self._finalize_flat_frame(df_netted)
+
+            # Map every ENTSO-E production type to its own energy_generation
+            # column (NaN-preserving).
+            df_generation = self._map_generation_columns(df_netted)
+
+            # Map to the frozen 8-column energy_renewable shape, from the
+            # pre-netting flatten -- not from df_generation.
+            df_renewable = self._map_renewable_columns(df_old_flatten)
+
+            logger.info(
+                f"Retrieved {len(df_generation)} full-generation / "
+                f"{len(df_renewable)} renewable records for {country_code} "
+                f"from one A75 fetch (published: {publication_time})"
+            )
+            return df_generation, df_renewable, publication_time
+
+        except ENTSOENoDataError:
+            logger.warning(f"No generation data for {country_code} ({start} to {end})")
+            return None, None, None
+
+        except Exception as e:
+            logger.error(f"Error querying generation+renewable data for {country_code}: {utils.format_error(e)}")
+            return None, None, None
+
     def _net_generation_consumption(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Flatten the (production_type, data_type) MultiIndex ENTSO-E returns
@@ -1244,6 +1377,80 @@ class ENTSOEClient:
             # at least one of its sub-series was present in df.columns.
 
         return pd.DataFrame(new_columns, index=df.index)
+
+    def _flatten_prefer_aggregated(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Flatten the (production_type, data_type) MultiIndex the OLD way:
+        prefer 'Actual Aggregated', drop 'Actual Consumption' entirely.
+
+        This is the exact logic that has always lived inline in
+        query_generation_per_type and query_generation_per_type_with_metadata
+        -- copied out verbatim (not rewritten) so
+        query_generation_and_renewable_with_metadata can derive an
+        energy_renewable frame that is byte-identical to what those two
+        methods have always produced. Do NOT "improve" this to match
+        _net_generation_consumption's signed-netting behaviour --
+        energy_renewable is frozen and has never claimed a netted value for
+        Hydro Pumped Storage (or any other store-like type); it only ever
+        kept the Aggregated (generating) side and silently dropped
+        Consumption (pumping/charging).
+
+        A production type that reports ONLY 'Actual Consumption' across the
+        whole window (no 'Actual Aggregated' sub-series at all) vanishes
+        from the result entirely -- same as it always has in the two
+        methods this is extracted from.
+
+        query_generation_per_type and query_generation_per_type_with_metadata
+        are deliberately left with their own inline copy of this logic
+        rather than refactored to call this method -- both are already
+        reviewed/committed and this change must not risk altering their
+        behaviour by even a whitespace diff.
+
+        Args:
+            df: DataFrame with a 2-level MultiIndex columns
+                (production_type, data_type) and a timestamp index.
+
+        Returns:
+            DataFrame with a flat Index of production_type column names,
+            same timestamp index, 'Actual Aggregated' values only.
+        """
+        new_columns = {}
+        for col in df.columns:
+            prod_type, data_type = col
+            # Skip consumption data (e.g., Hydro Pumped Storage consumption)
+            if 'Consumption' in data_type:
+                continue
+            # Use just the production type as column name
+            if prod_type not in new_columns:
+                new_columns[prod_type] = df[col]
+        return pd.DataFrame(new_columns, index=df.index)
+
+    def _finalize_flat_frame(self, flat_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Turn a flattened (single-level-column, timestamp-indexed) generation
+        frame into the (timestamp_utc column, tz-aware UTC) shape every
+        query_* method in this file produces after flattening.
+
+        Factored out because query_generation_and_renewable_with_metadata
+        must run this twice -- once for each independently-derived flatten
+        of the same source frame -- and the two must not share a DataFrame
+        object (reset_index()/rename() would otherwise risk one mutating
+        state the other still needs).
+
+        Args:
+            flat_df: DataFrame with a flat Index of production_type columns
+                and a timestamp index (from _flatten_prefer_aggregated or
+                _net_generation_consumption).
+
+        Returns:
+            DataFrame with 'timestamp_utc' as a column (tz-aware UTC)
+            instead of the index.
+        """
+        flat_df = flat_df.reset_index()
+        if 'index' in flat_df.columns:
+            flat_df.rename(columns={'index': 'timestamp_utc'}, inplace=True)
+        flat_df['timestamp_utc'] = utils.ensure_timezone_aware(flat_df['timestamp_utc'], 'UTC')
+        return flat_df
 
     def _map_renewable_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """

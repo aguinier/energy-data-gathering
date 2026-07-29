@@ -15,6 +15,7 @@ from __future__ import annotations
 import sys
 import types
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
@@ -22,6 +23,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import config  # noqa: E402
+from src import db  # noqa: E402
+from src import fetch_renewable  # noqa: E402
 from src.entsoe_client import ENTSOEClient  # noqa: E402
 
 
@@ -268,3 +271,314 @@ def test_output_has_no_default_zero_fill(client):
 
     for col in absent_columns:
         assert pd.isna(out[col].iloc[0]), f"{col} should be NaN (absent), not filled"
+
+
+# ============================================================================
+# Task 3: one A75 fetch, two writes -- query_generation_and_renewable_with_metadata,
+# db.upsert_generation_data, fetch_renewable.fetch_renewable_data
+# ============================================================================
+#
+# The central risk in this task: query_generation_all_types_with_metadata
+# (Task 2) nets 'Actual Aggregated' - 'Actual Consumption' per production
+# type, but query_generation_per_type_with_metadata (the method
+# energy_renewable has always been written from) only ever keeps
+# 'Actual Aggregated' and silently drops 'Actual Consumption'. Deriving
+# energy_renewable from the ALREADY-netted energy_generation frame would
+# therefore change hydro_reservoir_mw (it folds in Hydro Pumped Storage) --
+# and possibly other renewable columns -- for any country/window where a
+# renewable-mapped type reports both sub-series. The tests below prove the
+# derived renewable frame matches the old, frozen path across every shape a
+# production type can take.
+
+
+def _all_21_types_mixed_shapes_multiindex_frame():
+    """Covers all 21 GENERATION_COLUMN_MAP production types, split across
+    the three shapes a type can take in a real A75 response: both
+    'Actual Aggregated' and 'Actual Consumption', 'Actual Aggregated' only,
+    or 'Actual Consumption' only.
+
+    The renewable-mapped ENTSO-E names (the 11 that feed
+    _map_renewable_columns's column_mapping, including the two pairs it
+    folds together -- Hydro Pumped Storage + Hydro Water Reservoir into
+    hydro_reservoir_mw, and Energy storage + Other renewable + Marine into
+    other_renewable_mw) are deliberately spread across all three shapes, so
+    the equivalence test exercises every combination that folding can hit:
+      - both-series:        Hydro Pumped Storage, Wind Onshore, Marine
+      - aggregated-only:     Solar, Wind Offshore, Hydro Run-of-river and
+                              poundage, Hydro Water Reservoir, Biomass
+      - consumption-only:    Geothermal, Energy storage, Other renewable
+
+    The remaining 10 (non-renewable-mapped: nuclear, fossil, waste, other)
+    are also spread across all three shapes for full 21-type coverage, even
+    though they cannot affect the renewable frame -- they matter for the
+    energy_generation side of the equivalence, and for catching a
+    regression where the old-style flatten accidentally starts keeping a
+    fossil/nuclear column it never used to.
+    """
+    both = [
+        'Hydro Pumped Storage', 'Wind Onshore', 'Marine',
+        'Nuclear', 'Fossil Hard coal', 'Fossil Gas',
+    ]
+    aggregated_only = [
+        'Solar', 'Wind Offshore', 'Hydro Run-of-river and poundage',
+        'Hydro Water Reservoir', 'Biomass', 'Waste', 'Other', 'Fossil Oil',
+    ]
+    consumption_only = [
+        'Geothermal', 'Energy storage', 'Other renewable',
+        'Fossil Brown coal/Lignite', 'Fossil Oil shale',
+        'Fossil Peat', 'Fossil Coal-derived gas',
+    ]
+
+    assert set(both) | set(aggregated_only) | set(consumption_only) == set(
+        config.GENERATION_COLUMN_MAP.keys()
+    )
+    assert len(both) + len(aggregated_only) + len(consumption_only) == 21
+
+    idx = pd.date_range('2026-07-29T00:00:00Z', periods=2, freq='15min')
+
+    columns_data = {}
+    value = 10.0
+    for prod_type in both:
+        columns_data[(prod_type, 'Actual Aggregated')] = [value, value + 1]
+        value += 100
+        columns_data[(prod_type, 'Actual Consumption')] = [value, value + 1]
+        value += 100
+    for prod_type in aggregated_only:
+        columns_data[(prod_type, 'Actual Aggregated')] = [value, value + 1]
+        value += 100
+    for prod_type in consumption_only:
+        columns_data[(prod_type, 'Actual Consumption')] = [value, value + 1]
+        value += 100
+
+    return pd.DataFrame(columns_data, index=idx)
+
+
+def _stub_client(df, monkeypatch, country_code='FR'):
+    """Build an ENTSOEClient wired to a fixed stub response, network and DB
+    dependencies mocked out -- same pattern as the `flatten_client` fixture
+    above, generalised to an arbitrary source frame so it can be reused for
+    both the old and the new fetch path from the same underlying document."""
+    c = ENTSOEClient.__new__(ENTSOEClient)
+    c.raw_client = _StubRawClient()
+    c.client = _StubPandasClient(df)
+    c._rate_limit = types.MethodType(lambda self: None, c)
+    monkeypatch.setattr(
+        c, '_get_country_domain', lambda cc: {'entsoe_domain': country_code}
+    )
+    return c
+
+
+def test_derived_renewable_frame_matches_old_path_across_all_shapes(monkeypatch):
+    """The equivalence proof this task exists to deliver: energy_renewable
+    derived via query_generation_and_renewable_with_metadata must be
+    byte-identical to what query_generation_per_type_with_metadata (the
+    method energy_renewable has always been written from) produces from the
+    exact same underlying A75 document -- across all 21 production types and
+    all three sub-series shapes, not just the France-shaped smoke case.
+
+    Both calls read from the same stub document (the same DataFrame object,
+    read-only on every call, never mutated by either flatten), so any
+    difference in the result can only come from the flatten/mapping logic
+    itself -- exactly the class of bug this test is meant to catch.
+    """
+    df = _all_21_types_mixed_shapes_multiindex_frame()
+    client = _stub_client(df, monkeypatch)
+
+    start = pd.Timestamp('2026-07-29T00:00:00Z')
+    end = pd.Timestamp('2026-07-29T01:00:00Z')
+
+    old_renewable_df, old_publication_time = client.query_generation_per_type_with_metadata(
+        'FR', start, end
+    )
+    generation_df, new_renewable_df, new_publication_time = (
+        client.query_generation_and_renewable_with_metadata('FR', start, end)
+    )
+
+    assert old_renewable_df is not None
+    assert new_renewable_df is not None
+    assert generation_df is not None
+    assert old_publication_time == new_publication_time
+
+    # Column set, row count and every value must match exactly -- sort
+    # columns so an incidental ordering difference isn't mistaken for a
+    # real one.
+    old_sorted = old_renewable_df.sort_index(axis=1).reset_index(drop=True)
+    new_sorted = new_renewable_df.sort_index(axis=1).reset_index(drop=True)
+    pd.testing.assert_frame_equal(old_sorted, new_sorted)
+
+    # Spot-check the exact case that would break if energy_renewable were
+    # derived from the NETTED frame instead of the pre-netting flatten:
+    # Hydro Pumped Storage is both-series here, and folds into
+    # hydro_reservoir_mw alongside Hydro Water Reservoir (aggregated-only).
+    # The old/frozen path keeps only the Aggregated side of Hydro Pumped
+    # Storage (its Consumption side is silently dropped) -- if the new path
+    # instead netted Aggregated-Consumption before folding, this column
+    # would come out lower (or negative) instead of matching.
+    assert (new_renewable_df['hydro_reservoir_mw'] == old_renewable_df['hydro_reservoir_mw']).all()
+    assert not old_renewable_df['hydro_reservoir_mw'].isna().any()
+
+
+def test_query_generation_and_renewable_makes_exactly_two_requests(monkeypatch):
+    """One A75 fetch, two writes: query_generation_and_renewable_with_metadata
+    must not issue more _make_request calls than
+    query_generation_all_types_with_metadata already does on its own (one
+    raw-XML call for the publication timestamp, one pandas-client call for
+    the structured frame) -- it must NOT call both
+    query_generation_per_type_with_metadata and
+    query_generation_all_types_with_metadata internally, which would double
+    the request count and defeat the entire point of this task."""
+    df = _all_21_types_mixed_shapes_multiindex_frame()
+    client = _stub_client(df, monkeypatch)
+
+    calls = []
+    real_make_request = client._make_request
+
+    def _spy(method, *args, **kwargs):
+        calls.append(getattr(method, '__self__', None))
+        return real_make_request(method, *args, **kwargs)
+
+    monkeypatch.setattr(client, '_make_request', _spy)
+
+    start = pd.Timestamp('2026-07-29T00:00:00Z')
+    end = pd.Timestamp('2026-07-29T01:00:00Z')
+    generation_df, renewable_df, publication_time = (
+        client.query_generation_and_renewable_with_metadata('FR', start, end)
+    )
+
+    assert generation_df is not None
+    assert renewable_df is not None
+    assert len(calls) == 2, f"expected exactly 2 _make_request calls, got {len(calls)}"
+    assert calls[0] is client.raw_client
+    assert calls[1] is client.client
+
+
+def test_fetch_renewable_data_writes_both_tables_from_one_client_call(monkeypatch):
+    """fetch_renewable.fetch_renewable_data must call the client's combined
+    method exactly once and upsert both tables from its output -- never call
+    a second query method to fill energy_generation, and never leave either
+    table unwritten."""
+    generation_df = pd.DataFrame({
+        'timestamp_utc': [pd.Timestamp('2026-07-29T00:00:00Z')],
+        'nuclear_mw': [42000.0],
+    })
+    renewable_df = pd.DataFrame({
+        'timestamp_utc': [pd.Timestamp('2026-07-29T00:00:00Z')],
+        'solar_mw': [100.0],
+    })
+    publication_time = pd.Timestamp('2026-07-29T10:00:00Z')
+
+    mock_client = MagicMock()
+    mock_client.query_generation_and_renewable_with_metadata.return_value = (
+        generation_df, renewable_df, publication_time
+    )
+
+    monkeypatch.setattr(
+        db, 'upsert_generation_data',
+        MagicMock(return_value=(1, 0)),
+    )
+    monkeypatch.setattr(
+        db, 'upsert_renewable_data',
+        MagicMock(return_value=(1, 0)),
+    )
+
+    start = pd.Timestamp('2026-07-29T00:00:00Z')
+    end = pd.Timestamp('2026-07-29T01:00:00Z')
+    inserted, updated, failed = fetch_renewable.fetch_renewable_data(
+        mock_client, 'FR', start, end
+    )
+
+    assert failed == 0
+    assert inserted == 2  # 1 generation + 1 renewable
+    assert updated == 0
+
+    mock_client.query_generation_and_renewable_with_metadata.assert_called_once_with(
+        'FR', start, end
+    )
+    # query_generation_per_type_with_metadata / query_generation_all_types_with_metadata
+    # must NOT be called by the ingest path -- that would be a second A75 fetch.
+    assert not mock_client.query_generation_per_type_with_metadata.called
+    assert not mock_client.query_generation_all_types_with_metadata.called
+
+    db.upsert_generation_data.assert_called_once()
+    gen_call_args = db.upsert_generation_data.call_args
+    assert gen_call_args[0][0] is generation_df
+    assert gen_call_args[0][1] == 'FR'
+    assert gen_call_args[1]['publication_timestamp'] == publication_time
+
+    db.upsert_renewable_data.assert_called_once()
+    ren_call_args = db.upsert_renewable_data.call_args
+    assert ren_call_args[0][0] is renewable_df
+    assert ren_call_args[0][1] == 'FR'
+    assert ren_call_args[1]['publication_timestamp'] == publication_time
+
+
+@pytest.fixture
+def scratch_generation_db(tmp_path, monkeypatch):
+    """A fresh, throwaway SQLite file with the energy_generation schema
+    applied -- never the read-only replica or prod. Points db.get_connection()
+    at this file only for the duration of the test."""
+    scratch_path = tmp_path / "scratch_generation.db"
+    monkeypatch.setattr(config, 'DATABASE_PATH', scratch_path)
+    db.create_generation_table()
+    return scratch_path
+
+
+def test_upsert_generation_data_writes_null_for_absent_types_not_zero(scratch_generation_db):
+    """The upsert's core contract: a column absent from the source frame (NaN
+    in pandas) must land as SQL NULL in energy_generation, never 0 -- 0 is a
+    measurement claim (e.g. solar at night), NULL is "not reported"."""
+    generation_cols = config.get_generation_columns()
+    df = pd.DataFrame({
+        'timestamp_utc': [pd.Timestamp('2026-07-29T00:00:00Z')],
+        'nuclear_mw': [42000.0],
+        'solar_mw': [0.0],  # measured zero -- must stay 0, not become NULL
+    })
+
+    inserted, updated = db.upsert_generation_data(
+        df, 'FR', publication_timestamp=pd.Timestamp('2026-07-29T10:00:00Z')
+    )
+    assert inserted == 1
+
+    with db.get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            f"SELECT {', '.join(generation_cols)}, publication_timestamp_utc "
+            "FROM energy_generation WHERE country_code = 'FR'"
+        )
+        row = cursor.fetchone()
+
+    assert row is not None
+    row_dict = dict(row)
+
+    assert row_dict['nuclear_mw'] == 42000.0
+    assert row_dict['solar_mw'] == 0.0  # measured zero survives, not NULL
+
+    absent_cols = set(generation_cols) - {'nuclear_mw', 'solar_mw'}
+    for col in absent_cols:
+        assert row_dict[col] is None, f"{col} should be SQL NULL, got {row_dict[col]!r}"
+
+    assert row_dict['publication_timestamp_utc'] is not None
+
+
+def test_upsert_generation_data_upserts_on_conflict_not_duplicates(scratch_generation_db):
+    """Re-upserting the same (country_code, timestamp_utc) must update the
+    existing row in place -- the unique index this table depends on for
+    resumable backfills (Task 4) -- not insert a second row."""
+    ts = pd.Timestamp('2026-07-29T00:00:00Z')
+
+    df_v1 = pd.DataFrame({'timestamp_utc': [ts], 'nuclear_mw': [1000.0]})
+    db.upsert_generation_data(df_v1, 'DE')
+
+    df_v2 = pd.DataFrame({'timestamp_utc': [ts], 'nuclear_mw': [1234.0]})
+    db.upsert_generation_data(df_v2, 'DE')
+
+    with db.get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT COUNT(*) as n, MAX(nuclear_mw) as nuclear_mw "
+            "FROM energy_generation WHERE country_code = 'DE'"
+        )
+        row = cursor.fetchone()
+
+    assert row['n'] == 1, "conflicting upsert must update in place, not duplicate"
+    assert row['nuclear_mw'] == 1234.0
