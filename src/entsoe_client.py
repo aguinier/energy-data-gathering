@@ -1085,6 +1085,107 @@ class ENTSOEClient:
             logger.error(f"Error querying renewable data for {country_code}: {utils.format_error(e)}")
             return None, None
 
+    def query_generation_all_types_with_metadata(
+        self,
+        country_code: str,
+        start: datetime,
+        end: datetime
+    ) -> Tuple[Optional[pd.DataFrame], Optional[datetime]]:
+        """
+        Query actual generation for the COMPLETE A75 document -- every
+        production type ENTSO-E reports, not just the 8 renewable columns
+        query_generation_per_type_with_metadata keeps.
+
+        This issues its own request to ENTSO-E (same A75 document, same
+        psr_type=None as the renewable query). It does not itself avoid a
+        second API call for the same window -- callers that need "one fetch,
+        two writes" (energy_generation + energy_renewable from a single
+        response) must derive the renewable frame from this method's output
+        rather than calling both query methods.
+
+        Args:
+            country_code: ISO 2-letter country code
+            start: Start datetime (UTC)
+            end: End datetime (UTC)
+
+        Returns:
+            Tuple of (dataframe, publication_timestamp).
+            - DataFrame with one column per energy_generation column
+              (config.GENERATION_COLUMN_MAP), NaN where a type is absent --
+              never 0 for an absent type.
+            - Publication timestamp when ENTSO-E created the data.
+            Both are None if no data available.
+        """
+        try:
+            # Get country ENTSO-E domain
+            country = self._get_country_domain(country_code)
+
+            # Convert to pandas Timestamps (required by entsoe-py)
+            start_ts = pd.Timestamp(start).tz_convert('UTC') if hasattr(start, 'tzinfo') and start.tzinfo else pd.Timestamp(start, tz='UTC')
+            end_ts = pd.Timestamp(end).tz_convert('UTC') if hasattr(end, 'tzinfo') and end.tzinfo else pd.Timestamp(end, tz='UTC')
+
+            # Fetch raw XML first to extract publication timestamp
+            raw_xml = self._make_request(
+                self.raw_client.query_generation,
+                country['entsoe_domain'],
+                start=start_ts,
+                end=end_ts,
+                psr_type=None  # Get all production types
+            )
+
+            # Extract publication timestamp from XML
+            publication_time = self._extract_publication_timestamp(raw_xml)
+
+            # Now get the data using the pandas client (existing logic)
+            df = self._make_request(
+                self.client.query_generation,
+                country['entsoe_domain'],
+                start=start_ts,
+                end=end_ts,
+                psr_type=None  # Get all production types
+            )
+
+            if df is None or df.empty:
+                raise ENTSOENoDataError("No generation data returned")
+
+            # Handle MultiIndex columns (production type, data type)
+            if isinstance(df.columns, pd.MultiIndex):
+                # Flatten MultiIndex: prefer 'Actual Aggregated' over 'Actual Consumption'
+                new_columns = {}
+                for col in df.columns:
+                    prod_type, data_type = col
+                    # Skip consumption data (e.g., Hydro Pumped Storage consumption)
+                    if 'Consumption' in data_type:
+                        continue
+                    # Use just the production type as column name
+                    if prod_type not in new_columns:
+                        new_columns[prod_type] = df[col]
+                df = pd.DataFrame(new_columns, index=df.index)
+
+            # Reset index to make timestamp a column
+            df = df.reset_index()
+
+            # Ensure timestamp column name
+            if 'index' in df.columns:
+                df.rename(columns={'index': 'timestamp_utc'}, inplace=True)
+
+            # Ensure timestamps are UTC
+            df['timestamp_utc'] = utils.ensure_timezone_aware(df['timestamp_utc'], 'UTC')
+
+            # Map every ENTSO-E production type to its own energy_generation column
+            df_generation = self._map_generation_columns(df)
+
+            logger.info(f"Retrieved {len(df_generation)} full-generation records for {country_code} (published: {publication_time})")
+            return df_generation, publication_time
+
+        except ENTSOENoDataError:
+            logger.warning(f"No generation data for {country_code} ({start} to {end})")
+            return None, None
+
+        except Exception as e:
+            logger.error(f"Error querying full generation data for {country_code}: {utils.format_error(e)}")
+            return None, None
+
     def _map_renewable_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Map ENTSO-E generation columns to our renewable energy columns
@@ -1132,6 +1233,71 @@ class ENTSOEClient:
 
         # Group by timestamp and sum (in case of duplicate timestamps with different types)
         result = result.groupby('timestamp_utc').sum().reset_index()
+
+        return result
+
+    def _map_generation_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Map every ENTSO-E A75 production-type column to its own
+        energy_generation column -- the complete document, not just the 8
+        renewable columns _map_renewable_columns keeps.
+
+        Unlike _map_renewable_columns, this is a straight 1:1 mapping (no
+        column ever receives more than one ENTSO-E source name -- see
+        config.GENERATION_COLUMN_MAP) and it never fillna(0): a production
+        type absent from the source frame stays NaN, which lands as SQL
+        NULL. NULL and 0 are different claims -- a country not reporting
+        coal is not the same as a country generating 0 coal -- and
+        initialising with 0.0 or fillna(0) would destroy that distinction.
+        This is the one behaviour this method must not copy from
+        _map_renewable_columns.
+
+        Any ENTSO-E column not in config.GENERATION_COLUMN_MAP is logged at
+        WARNING rather than silently dropped -- a new upstream production
+        type must be visible, which is exactly how the renewable-only
+        mapping lost nuclear.
+
+        Args:
+            df: DataFrame from ENTSO-E with generation columns (flattened,
+                timestamp_utc already a column)
+
+        Returns:
+            DataFrame with one row per timestamp_utc and one column per
+            config.GENERATION_COLUMN_MAP value, NaN where a type is absent.
+        """
+        # Initialize result DataFrame with timestamp
+        result = pd.DataFrame()
+        result['timestamp_utc'] = df['timestamp_utc']
+
+        # Initialize every energy_generation column with NaN, NOT 0 -- see
+        # docstring. This line is the one most likely to regress this
+        # table's entire reason for existing if "simplified" to match
+        # _map_renewable_columns's `result[col] = 0.0`.
+        for col in config.get_generation_columns():
+            result[col] = float('nan')
+
+        # Map data. Unlike _map_renewable_columns this never needs `+=`
+        # accumulation: GENERATION_COLUMN_MAP never sends two ENTSO-E names
+        # to the same column.
+        for entsoe_col in df.columns:
+            if entsoe_col == 'timestamp_utc':
+                continue
+            our_col = config.GENERATION_COLUMN_MAP.get(entsoe_col)
+            if our_col is None:
+                logger.warning(
+                    f"Unmapped ENTSO-E generation column '{entsoe_col}' - not "
+                    "in config.GENERATION_COLUMN_MAP, dropped from "
+                    "energy_generation. Add it to GENERATION_COLUMN_MAP if "
+                    "this is a real production type -- do not ignore this."
+                )
+                continue
+            result[our_col] = df[entsoe_col]
+
+        # Collapse duplicate timestamp rows (mirrors _map_renewable_columns).
+        # min_count=1 is required: without it, groupby-sum silently turns an
+        # all-NaN group into 0.0, reintroducing the exact NULL-vs-zero bug
+        # this table exists to avoid.
+        result = result.groupby('timestamp_utc', as_index=False).sum(min_count=1)
 
         return result
 
