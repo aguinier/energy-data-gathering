@@ -22,7 +22,20 @@ def fetch_renewable_data(
     log_id: Optional[int] = None
 ) -> Tuple[int, int, int]:
     """
-    Fetch and store renewable energy generation data for a country
+    Fetch the A75 document ONCE and store BOTH energy_generation (the
+    complete document) and energy_renewable (the frozen 8-column subset)
+    from that single response.
+
+    This used to call query_generation_per_type_with_metadata and write only
+    energy_renewable. It now calls
+    client.query_generation_and_renewable_with_metadata -- which itself
+    issues exactly the same two _make_request calls (raw XML for the
+    publication timestamp, pandas client for the structured frame) that
+    query_generation_per_type_with_metadata always made -- and derives both
+    output frames from that one fetch. There is no second ENTSO-E request to
+    fill energy_generation; see that method's docstring and
+    tests/test_generation_mapping.py for the equivalence proof that the
+    derived energy_renewable frame is unchanged.
 
     Args:
         client: ENTSO-E client instance
@@ -32,24 +45,44 @@ def fetch_renewable_data(
         log_id: Optional ingestion log ID
 
     Returns:
-        Tuple of (records_inserted, records_updated, records_failed)
+        Tuple of (records_inserted, records_updated, records_failed) --
+        inserted/updated are summed across both tables (generation +
+        renewable) so callers that track total records affected (e.g.
+        Pipeline._fetch_data_chunk's self.stats['total_records']) keep
+        seeing an accurate count without needing their own changes.
     """
-    logger.info(f"Fetching renewable data for {country_code}: {start.date()} to {end.date()}")
+    logger.info(f"Fetching generation data for {country_code}: {start.date()} to {end.date()}")
 
     try:
-        # Query ENTSO-E API with metadata
-        df, publication_time = client.query_generation_per_type_with_metadata(country_code, start, end)
-
-        if df is None or df.empty:
-            logger.warning(f"No renewable data returned for {country_code}")
-            return 0, 0, 0
-
-        # Upsert data to database with publication timestamp
-        records_inserted, records_updated = db.upsert_renewable_data(
-            df, country_code, publication_timestamp=publication_time
+        # Query ENTSO-E API once; derive both output frames from it.
+        generation_df, renewable_df, publication_time = (
+            client.query_generation_and_renewable_with_metadata(country_code, start, end)
         )
 
-        logger.info(f"Successfully stored {records_inserted} renewable records for {country_code}")
+        if (
+            generation_df is None or generation_df.empty
+            or renewable_df is None or renewable_df.empty
+        ):
+            logger.warning(f"No generation data returned for {country_code}")
+            return 0, 0, 0
+
+        # Upsert the complete document first...
+        gen_inserted, gen_updated = db.upsert_generation_data(
+            generation_df, country_code, publication_timestamp=publication_time
+        )
+
+        # ...then the frozen renewable subset, derived from the same fetch.
+        ren_inserted, ren_updated = db.upsert_renewable_data(
+            renewable_df, country_code, publication_timestamp=publication_time
+        )
+
+        records_inserted = gen_inserted + ren_inserted
+        records_updated = gen_updated + ren_updated
+
+        logger.info(
+            f"Successfully stored {gen_inserted} generation + {ren_inserted} "
+            f"renewable records for {country_code}"
+        )
         return records_inserted, records_updated, 0
 
     except ENTSOENoDataError as e:

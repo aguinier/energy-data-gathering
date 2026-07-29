@@ -145,6 +145,49 @@ ENTSOE_API_CONFIG = {
 }
 
 # ============================================================================
+# FULL A75 GENERATION MAPPING (energy_generation)
+# ============================================================================
+# A75 ("Generation per production type") is already fetched with
+# psr_type=None -- the whole document, not just renewables -- but the
+# 'renewable' config block above (and _map_renewable_columns) only keeps 8
+# columns and silently drops the rest (nuclear, fossil, waste, other).
+#
+# This map is the *complete* ENTSO-E column name -> energy_generation column
+# mapping, alongside (not replacing) the renewable one. It is a straight 1:1
+# mapping -- no folding -- so hydro_pumped_mw, marine_mw and
+# energy_storage_mw get their own columns instead of being combined into
+# hydro_reservoir_mw / other_renewable_mw the way the renewable mapping
+# combines them.
+#
+# The 21 ENTSO-E column names below were measured live against the real API
+# across DE/PL/ES (2026-07-29) -- do not guess additional ones; if ENTSO-E
+# adds a new production type, entsoe_client._map_generation_columns logs it
+# at WARNING rather than silently dropping it.
+GENERATION_COLUMN_MAP = {
+    'Biomass': 'biomass_mw',
+    'Energy storage': 'energy_storage_mw',
+    'Fossil Brown coal/Lignite': 'fossil_brown_coal_mw',
+    'Fossil Coal-derived gas': 'fossil_coal_derived_gas_mw',
+    'Fossil Gas': 'fossil_gas_mw',
+    'Fossil Hard coal': 'fossil_hard_coal_mw',
+    'Fossil Oil': 'fossil_oil_mw',
+    'Fossil Oil shale': 'fossil_oil_shale_mw',
+    'Fossil Peat': 'fossil_peat_mw',
+    'Geothermal': 'geothermal_mw',
+    'Hydro Pumped Storage': 'hydro_pumped_mw',
+    'Hydro Run-of-river and poundage': 'hydro_run_mw',
+    'Hydro Water Reservoir': 'hydro_reservoir_mw',
+    'Marine': 'marine_mw',
+    'Nuclear': 'nuclear_mw',
+    'Other': 'other_mw',
+    'Other renewable': 'other_renewable_mw',
+    'Solar': 'solar_mw',
+    'Waste': 'waste_mw',
+    'Wind Offshore': 'wind_offshore_mw',
+    'Wind Onshore': 'wind_onshore_mw',
+}
+
+# ============================================================================
 # BACKFILL DEFAULT PERIODS
 # ============================================================================
 # These are default start dates for backfilling historical data
@@ -246,6 +289,24 @@ SCHEMA = {
         ],
         'unique_constraint': ['country_code', 'timestamp_utc']
     },
+    'energy_generation': {
+        # Complete A75 document -- one column per production type, all
+        # NULL-default (no DEFAULT 0; see create_generation_table() in
+        # src/db.py). energy_renewable above is unchanged and unrelated.
+        'columns': [
+            'id', 'country_code', 'timestamp_utc',
+            'solar_mw', 'wind_onshore_mw', 'wind_offshore_mw',
+            'hydro_run_mw', 'hydro_reservoir_mw', 'hydro_pumped_mw',
+            'biomass_mw', 'geothermal_mw', 'marine_mw',
+            'other_renewable_mw', 'energy_storage_mw',
+            'nuclear_mw', 'fossil_gas_mw', 'fossil_hard_coal_mw',
+            'fossil_brown_coal_mw', 'fossil_oil_mw', 'fossil_oil_shale_mw',
+            'fossil_peat_mw', 'fossil_coal_derived_gas_mw',
+            'waste_mw', 'other_mw',
+            'data_quality', 'fetched_at', 'publication_timestamp_utc'
+        ],
+        'unique_constraint': ['country_code', 'timestamp_utc']
+    },
     'data_ingestion_log': {
         'columns': [
             'id', 'pipeline_type', 'country_code',
@@ -275,6 +336,16 @@ def get_table_name(data_type):
 def get_renewable_columns():
     """Get list of renewable energy columns"""
     return ENTSOE_API_CONFIG['renewable']['renewable_columns']
+
+
+def get_generation_columns():
+    """Get list of energy_generation columns (all 21 A75 production types).
+
+    Order matches GENERATION_COLUMN_MAP's insertion order. Unlike
+    get_renewable_columns(), this is a 1:1 mapping so every value is
+    distinct -- no column receives more than one ENTSO-E source name.
+    """
+    return list(GENERATION_COLUMN_MAP.values())
 
 
 def is_dayahead_data_type(data_type: str) -> bool:
