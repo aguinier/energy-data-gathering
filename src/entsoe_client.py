@@ -1696,6 +1696,75 @@ class ENTSOEClient:
                 return None
             raise
 
+    def query_net_position_data_with_metadata(
+        self,
+        country_code: str,
+        start: datetime,
+        end: datetime,
+        dayahead: bool = True,
+    ) -> Tuple[Optional[pd.Series], Optional[datetime]]:
+        """
+        Query realized net position for a country, with publication timestamp
+        metadata.
+
+        Same data as query_net_position_data, but follows the raw-XML-then-
+        parsed-frame pattern already established for load, day-ahead prices,
+        load forecast, wind/solar forecast, and generation-per-type (see
+        query_load_with_metadata, query_day_ahead_prices_with_metadata,
+        query_load_forecast_with_metadata, query_wind_solar_forecast_with_metadata,
+        query_generation_per_type_with_metadata): fetch the raw XML via
+        self.raw_client to read createdDateTime, then fetch the parsed
+        series via self.client as before.
+
+        `net_position.publication_timestamp_utc` is NULL for every existing
+        row -- this is what backfills/populates it going forward, and lets
+        the D+1 day-ahead net position (fetched since the is_dayahead fix)
+        be told apart from realized data published a day earlier.
+
+        Args:
+            country_code: ISO 2-letter country code
+            start: Start datetime (UTC)
+            end: End datetime (UTC)
+            dayahead: True for day-ahead, False for intraday
+
+        Returns:
+            Tuple of (series, publication_timestamp).
+            - pd.Series with timestamp index and MW values
+            - Publication timestamp when ENTSO-E created the data
+            Both are None if no data available.
+        """
+        try:
+            start_ts = pd.Timestamp(start).tz_convert('UTC') if hasattr(start, 'tzinfo') and start.tzinfo else pd.Timestamp(start, tz='UTC')
+            end_ts = pd.Timestamp(end).tz_convert('UTC') if hasattr(end, 'tzinfo') and end.tzinfo else pd.Timestamp(end, tz='UTC')
+
+            zone = self.NET_POSITION_BIDDING_ZONES.get(country_code, country_code)
+
+            # Fetch raw XML first to extract publication timestamp
+            raw_xml = self._make_request(
+                self.raw_client.query_net_position,
+                zone, start=start_ts, end=end_ts, dayahead=dayahead
+            )
+
+            # Extract publication timestamp from XML
+            publication_time = self._extract_publication_timestamp(raw_xml)
+
+            # Now get the data using the pandas client (existing logic)
+            series = self._make_request(
+                self.client.query_net_position,
+                zone, start=start_ts, end=end_ts, dayahead=dayahead
+            )
+
+            if series is None or series.empty:
+                logger.warning(f"No net position data for {country_code}")
+                return None, None
+
+            logger.info(f"Retrieved {len(series)} net position records for {country_code} (published: {publication_time})")
+            return series, publication_time
+
+        except ENTSOENoDataError:
+            logger.warning(f"No net position data for {country_code} ({start} to {end})")
+            return None, None
+
     # ========================================================================
     # HELPER METHODS
     # ========================================================================

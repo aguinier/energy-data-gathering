@@ -1061,6 +1061,7 @@ def upsert_crossborder_flows(
 def upsert_net_position(
     df: pd.DataFrame,
     country_code: str,
+    publication_timestamp: Optional[datetime] = None,
 ) -> Tuple[int, int]:
     """
     Insert or update net position data.
@@ -1068,6 +1069,10 @@ def upsert_net_position(
     Args:
         df: DataFrame with columns: timestamp_utc, net_position_mw
         country_code: ISO 2-letter country code
+        publication_timestamp: When ENTSO-E published this data (optional).
+            Same value applied to every row in df -- the ENTSO-E document
+            carries one createdDateTime per fetch, not per interval, matching
+            how upsert_load_data / upsert_renewable_data apply it.
 
     Returns:
         Tuple of (records_affected, 0)
@@ -1075,6 +1080,11 @@ def upsert_net_position(
     if df.empty:
         logger.warning(f"Empty DataFrame for net position, country {country_code}")
         return 0, 0
+
+    # Format publication timestamp if provided
+    pub_time_str = None
+    if publication_timestamp:
+        pub_time_str = utils.format_timestamp_for_db(publication_timestamp)
 
     records_affected = 0
 
@@ -1087,13 +1097,14 @@ def upsert_net_position(
                 """
                 INSERT OR REPLACE INTO net_position
                 (country_code, timestamp_utc, net_position_mw,
-                 data_quality, fetched_at)
-                VALUES (?, ?, ?, 'actual', CURRENT_TIMESTAMP)
+                 data_quality, publication_timestamp_utc, fetched_at)
+                VALUES (?, ?, ?, 'actual', ?, CURRENT_TIMESTAMP)
                 """,
                 (
                     country_code,
                     ts_str,
                     float(row["net_position_mw"]) if pd.notna(row["net_position_mw"]) else None,
+                    pub_time_str,
                 ),
             )
             records_affected += cursor.rowcount
