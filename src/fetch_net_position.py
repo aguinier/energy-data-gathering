@@ -43,7 +43,9 @@ def fetch_net_position_data(
     try:
         db.create_net_position_table()
 
-        series = client.query_net_position_data(country_code, start, end, dayahead=True)
+        series, publication_time = client.query_net_position_data_with_metadata(
+            country_code, start, end, dayahead=True
+        )
 
         if series is None or series.empty:
             logger.warning(f"No net position data for {country_code}")
@@ -68,7 +70,9 @@ def fetch_net_position_data(
             logger.warning(f"No valid net position data after resampling for {country_code}")
             return 0, 0, 0
 
-        records_inserted, _ = db.upsert_net_position(df, country_code)
+        records_inserted, _ = db.upsert_net_position(
+            df, country_code, publication_timestamp=publication_time
+        )
 
         logger.info(f"Stored {records_inserted} net position records for {country_code}")
         return records_inserted, 0, 0

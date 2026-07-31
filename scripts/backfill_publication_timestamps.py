@@ -283,6 +283,55 @@ def backfill_load_forecast_timestamps(
         return 0
 
 
+def backfill_net_position_timestamps(
+    client: ENTSOEClient,
+    country_code: str,
+    start_date: datetime,
+    end_date: datetime
+) -> int:
+    """Backfill publication timestamps for net position data"""
+
+    logger.info(f"Backfilling net position timestamps for {country_code}: {start_date.date()} to {end_date.date()}")
+
+    try:
+        # Query with metadata (net_position is DAY-AHEAD -- dayahead=True
+        # matches fetch_net_position.fetch_net_position_data)
+        series, pub_time = client.query_net_position_data_with_metadata(
+            country_code, start_date, end_date, dayahead=True
+        )
+
+        if series is None or pub_time is None:
+            logger.warning(f"No data or publication time returned")
+            return 0
+
+        # Update existing records with publication timestamp
+        pub_time_str = utils.format_timestamp_for_db(pub_time)
+
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE net_position
+                SET publication_timestamp_utc = ?
+                WHERE country_code = ?
+                  AND timestamp_utc >= ?
+                  AND timestamp_utc < ?
+                  AND publication_timestamp_utc IS NULL
+            """, (
+                pub_time_str,
+                country_code,
+                utils.format_timestamp_for_db(start_date),
+                utils.format_timestamp_for_db(end_date)
+            ))
+            updated = cursor.rowcount
+
+        logger.info(f"  Updated {updated} net position records with publication time: {pub_time}")
+        return updated
+
+    except Exception as e:
+        logger.error(f"Error backfilling net position timestamps: {e}")
+        return 0
+
+
 def backfill_table(
     table: str,
     country_code: str,
@@ -310,15 +359,17 @@ def backfill_table(
         'load': 'energy_load',
         'price': 'energy_price',
         'renewable': 'energy_renewable',
-        'load_forecast': 'energy_load_forecast'
+        'load_forecast': 'energy_load_forecast',
+        'net_position': 'net_position'
     }
-    
+
     # Map to backfill functions
     backfill_funcs = {
         'load': backfill_load_timestamps,
         'price': backfill_price_timestamps,
         'renewable': backfill_renewable_timestamps,
-        'load_forecast': backfill_load_forecast_timestamps
+        'load_forecast': backfill_load_forecast_timestamps,
+        'net_position': backfill_net_position_timestamps
     }
     
     db_table = table_map[table]
@@ -408,7 +459,7 @@ Examples:
         '--table',
         type=str,
         required=True,
-        choices=['load', 'price', 'renewable', 'load_forecast', 'all'],
+        choices=['load', 'price', 'renewable', 'load_forecast', 'net_position', 'all'],
         help='Table to backfill'
     )
 
@@ -484,7 +535,7 @@ def main():
 
     # Parse tables
     if args.table == 'all':
-        tables = ['load', 'price', 'renewable', 'load_forecast']
+        tables = ['load', 'price', 'renewable', 'load_forecast', 'net_position']
     else:
         tables = [args.table]
 
