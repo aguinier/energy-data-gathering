@@ -648,6 +648,61 @@ When importing or modifying data:
 4. **No negative energy values** - Energy metrics should be >= 0
 5. **Renewable totals must match sum of components** - Validate calculations
 
+### entsoe-py forward-fills sparse periods, and we used to store the fill
+
+An ENTSO-E `Period` declares a `resolution` over a `timeInterval`, implying N
+positions, but may carry fewer than N `Point` elements. **entsoe-py 0.8.0
+expands such a period by forward-filling the last published value across every
+missing position**, and `query_load_with_metadata` stored that expansion
+verbatim as `data_quality = 'actual'`.
+
+Measured against the live API on 2026-08-06 over
+`2026-08-01T22:00Z .. 2026-08-02T22:00Z`, across 18 countries, this affects
+exactly two:
+
+| country | rows returned | positions published | forward-filled | exact zeros |
+|---|---:|---:|---:|---:|
+| MK | 24 (`PT60M`) | **1** | 23 | 24 |
+| AL | 96 (`PT15M`) | 23 (hourly) | 73 | 0 |
+| the other 16 | 24 or 96 | all of them | 0 | 0 |
+
+MK's document carries one Point — `position 1, quantity 0.0` — and we wrote 24
+rows of a measured national demand of 0 MW, 23 of which were ours. That is the
+upstream source of the impossible-zero load rows the dashboard withholds at
+read time (ABL-35); this is the writer-side half (ABL-50).
+
+`src/published_points.py` is the rule, pure and with a colocated test
+(`tests/test_published_points.py`). `query_load_with_metadata` applies it
+before `remove_outliers`. It drops a row only when it is **both** a position
+the document carried no Point for **and** exactly `0.0`:
+
+- **Unpublished alone is not enough** — AL's 73 filled rows are the document's
+  own hourly step function and are kept. `test_al_shape_is_untouched_by_this_rule`
+  pins that, so the deferred follow-up (drop *every* forward-filled position,
+  taking AL to its true 24 rows/day) lands as a deliberate diff.
+- **Zero alone is not enough** — MK's `position 1` really was published as
+  `0.0`. That is MEPSO's number, so it is stored, and `measuredLoadClause()`
+  in the dashboard is what keeps it off a chart.
+- **Everything fails open.** Unparseable XML, an unrecognised resolution, or a
+  position grid matching none of the returned rows all keep every row and log
+  a warning. A parser that silently deleted real readings would be worse than
+  the defect it fixes.
+
+**Measured caveat on `curveType`, which matters before extending this.** All
+three documents sampled — MK, AL and DE — carry `curveType=A03`, "variable
+sized block", whose contract is that a Point's value holds until the next
+Point. So the forward fill *implements the document* rather than inventing a
+value at random: MK's document does assert 0 MW across the whole day. It is
+still not 24 measurements and a grid never draws 0 MW, which is why the zero
+restriction is the operative half of the rule. But do not carry the phrase
+"positions ENTSO-E never published" into the general case — under A03 an
+absent position is an encoded repeat, not an unknown.
+
+No second upstream request was added: the raw XML this reads is the document
+already downloaded for the publication timestamp, so the one-fetch-per-country-per-window
+invariant holds (`test_only_one_upstream_request_per_leg`). No schema change,
+and no existing row was backfilled or deleted.
+
 ### Completeness Cache
 
 The `completeness_cache` table stores pre-computed data quality metrics:

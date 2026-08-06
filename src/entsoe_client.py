@@ -21,6 +21,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 
 import config
 import utils
+from . import published_points
 
 
 logger = logging.getLogger('entsoe_pipeline')
@@ -449,6 +450,18 @@ class ENTSOEClient:
 
             # Ensure timestamps are UTC
             df['timestamp_utc'] = utils.ensure_timezone_aware(df['timestamp_utc'], 'UTC')
+
+            # entsoe-py forward-fills positions the document carried no Point
+            # for. Where that fill produced an exact 0.0 the row is ours, not
+            # the TSO's, and a national grid never draws 0 MW -- refuse to
+            # store it. Positions ENTSO-E did publish are kept whatever their
+            # value, including MK's genuinely published 0.0, which the read
+            # side (ABL-35) withholds instead. See published_points.py's
+            # header for why both halves of the rule are load-bearing, and for
+            # the measured curveType=A03 caveat. ABL-50.
+            df, _ = published_points.drop_unpublished_zeros(
+                df, raw_xml, 'load_mw', label=f"{country_code} load"
+            )
 
             # Validate data
             df = utils.remove_outliers(df, 'load_mw', 'load')
