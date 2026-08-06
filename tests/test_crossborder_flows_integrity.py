@@ -26,6 +26,17 @@ absence.
 attributed the missing DE-DK/SE/NO borders to that key; measured against
 entsoe-py's own NEIGHBOURS map, that is only half right, and the tests below
 pin what is actually true so the next reader does not re-derive it.
+
+**DE's query domain (ABL-39) -- the other half, and the one that actually lost
+the data.** The neighbour key says which borders to ask about; the query domain
+says which EIC goes on the wire. `DK_1`, `DK_2` and `SE_4` sat in DE's
+neighbour list under *both* keys and still returned nothing, because a bare
+`DE` resolves to the control area `10Y1001A1001A83F` while A11 physical flows
+are published per bidding-zone border. Measured on the Transparency Platform
+2026-08-01..05 under both domains: AT/BE/CH/CZ/FR/NL/PL identical, and DK_1
+0->213, DK_2 0->383, NO_2 0->133, SE_4 0->1. Seven borders unchanged, four
+recovered from nothing -- so the regression risk that kept this unfixed is
+measured rather than argued.
 """
 from __future__ import annotations
 
@@ -41,7 +52,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import config  # noqa: E402
 from src import db  # noqa: E402
-from src.entsoe_client import COUNTRY_TO_NEIGHBOURS_KEYS  # noqa: E402
+from src.entsoe_client import (  # noqa: E402
+    COUNTRY_TO_NEIGHBOURS_KEYS,
+    CROSSBORDER_QUERY_DOMAINS,
+    crossborder_query_domain,
+    normalize_zone_to_country,
+)
 from src.fetch_crossborder_flows import _normalize_wide_to_long  # noqa: E402
 
 
@@ -288,3 +304,126 @@ def test_de_lu_adds_at_and_no2_and_drops_austrias_borders():
     # zone. Germany does not touch either, so these were guaranteed-empty calls.
     assert old - new == {"IT_NORD", "IT_NORD_AT", "SI"}
     assert {"DK_1", "DK_2", "SE_4"} <= old & new
+
+
+# ============================================================================
+# DE's query domain -- the other half, and the one that actually lost the data
+# ============================================================================
+#
+# The neighbour key says which borders to ask about. The query DOMAIN says
+# which EIC goes on the wire. DK_1/DK_2/SE_4 were in the neighbour list under
+# both the old key and the new one and still returned nothing, because a bare
+# 'DE' resolves to the control area 10Y1001A1001A83F while A11 physical flows
+# are published per bidding-zone border.
+#
+# Measured on the Transparency Platform 2026-08-01..05, both domains, every
+# DE_LU border (scripts/probe_entsoe_zones.py --flows): AT/BE/CH/CZ/FR/NL/PL
+# identical, DK_1 0->213, DK_2 0->383, NO_2 0->133, SE_4 0->1. ABL-39.
+
+def test_de_flows_are_queried_under_the_bidding_zone():
+    assert crossborder_query_domain("DE") == "DE_LU", (
+        "a bare 'DE' resolves to the control area, which does not answer for "
+        "the DK/SE/NO borders"
+    )
+
+
+def test_every_other_country_is_queried_under_its_own_code():
+    # The map is an exception list, not a translation layer. A country with no
+    # both-domain measurement behind it must go on the wire unchanged --
+    # guessing a bidding zone is how IT would silently become IT_NORD.
+    for cc in ("FR", "BE", "NL", "PL", "CZ", "CH", "AT", "IT", "DK", "SE", "NO", "GR", "IE"):
+        assert crossborder_query_domain(cc) == cc
+
+
+def test_the_domain_map_only_claims_what_was_measured():
+    # Pins the map to DE alone. Adding an entry without the both-domain
+    # measurement in its header is the failure this guards: a domain that
+    # answers for some borders and not others reads as "that border does not
+    # exist", which is exactly how DE-DK went unnoticed for two years.
+    assert CROSSBORDER_QUERY_DOMAINS == {"DE": "DE_LU"}
+
+
+def test_the_recovered_borders_normalize_to_the_countries_the_audit_named():
+    # The four recovered borders are zone-named (DK_1, DK_2, NO_2, SE_4). What
+    # the audit reported missing was DE-DK, DE-SE and DE-NO, so the normalizer
+    # is what connects the fix to the finding -- and DK_1+DK_2 must land as one
+    # DK row rather than two.
+    assert normalize_zone_to_country("DK_1") == "DK"
+    assert normalize_zone_to_country("DK_2") == "DK"
+    assert normalize_zone_to_country("NO_2") == "NO"
+    assert normalize_zone_to_country("SE_4") == "SE"
+
+    at = pd.DatetimeIndex(["2026-08-01T00:00Z", "2026-08-01T01:00Z"])
+    wide = _wide(at, DK_1=[100.0, 110.0], DK_2=[20.0, 25.0], FR=[5.0, 5.0])
+    long_df = _normalize_wide_to_long(wide, "DE")
+
+    dk = long_df[long_df["country_to"] == "DK"]
+    assert len(dk) == 2, "DK_1 and DK_2 must aggregate into one DK series"
+    assert dk["flow_mw"].tolist() == [120.0, 135.0]
+    assert set(long_df["country_to"]) == {"DK", "FR"}
+
+
+# --- and the domain must actually reach the wire -------------------------
+#
+# The map above is inert unless query_crossborder_all uses it. These two drive
+# the real method against a stub and read back what it asked for; they fail on
+# the pre-fix code, which passed the bare country_code.
+
+class _RecordingInner:
+    """Stands in for the entsoe-py client; records every (out, in) domain pair."""
+
+    def __init__(self):
+        self.calls: list[tuple[str, str]] = []
+
+    def query_crossborder_flows(self, country_from, country_to, start, end):
+        self.calls.append((country_from, country_to))
+        idx = pd.date_range(start, periods=2, freq="h")
+        return pd.Series([10.0, 20.0], index=idx)
+
+
+@pytest.fixture
+def recording_client():
+    import types as _types
+
+    from src.entsoe_client import ENTSOEClient
+
+    c = ENTSOEClient.__new__(ENTSOEClient)   # bypass __init__ (needs an API key)
+    c.client = _RecordingInner()
+    c._rate_limit = _types.MethodType(lambda self: None, c)
+    return c
+
+
+def test_de_puts_the_bidding_zone_on_the_wire_not_the_country_code(recording_client):
+    start = pd.Timestamp("2026-08-01", tz="UTC")
+    end = pd.Timestamp("2026-08-02", tz="UTC")
+
+    recording_client.query_crossborder_all("DE", start, end, export=True)
+    out_domains = {out for out, _ in recording_client.client.calls}
+
+    assert out_domains == {"DE_LU"}, (
+        "every DE border must be asked under the bidding zone; a bare 'DE' is "
+        "the control area and loses DK_1/DK_2/NO_2/SE_4"
+    )
+    # And it asked about the recovered borders at all -- the neighbour half.
+    asked = {nb for _, nb in recording_client.client.calls}
+    assert {"DK_1", "DK_2", "NO_2", "SE_4"} <= asked
+
+
+def test_the_import_direction_uses_the_domain_too(recording_client):
+    # export=False swaps the argument order. Fixing one direction and not the
+    # other would halve DE's flows rather than fail loudly.
+    start = pd.Timestamp("2026-08-01", tz="UTC")
+    end = pd.Timestamp("2026-08-02", tz="UTC")
+
+    recording_client.query_crossborder_all("DE", start, end, export=False)
+
+    assert {inn for _, inn in recording_client.client.calls} == {"DE_LU"}
+
+
+def test_a_country_with_no_mapping_is_unchanged(recording_client):
+    start = pd.Timestamp("2026-08-01", tz="UTC")
+    end = pd.Timestamp("2026-08-02", tz="UTC")
+
+    recording_client.query_crossborder_all("FR", start, end, export=True)
+
+    assert {out for out, _ in recording_client.client.calls} == {"FR"}
