@@ -75,6 +75,30 @@ def _normalize_wide_to_long(
             result_frames.append(hourly_df)
         long_df = pd.concat(result_frames, ignore_index=True)
 
+        # Drop again, AFTER the resample. This is the one that matters and the
+        # dropna above cannot do its job: resample("h") reindexes onto a
+        # continuous hourly range, so any hour with no source point inside it --
+        # a gapped border, a suspended interconnector, an upstream outage -- is
+        # re-created as NaN *after* the earlier drop.
+        #
+        # Left in, that NaN reaches `flow_mw REAL NOT NULL`, the IntegrityError
+        # rolls back the shared connection, and the country's ENTIRE batch is
+        # discarded (db.get_connection's except-rollback-raise). One gapped
+        # border silently costs every border that country has. See ABL-35.
+        #
+        # Dropped, never filled: an hour ENTSO-E did not publish is unknown, and
+        # 0.0 would be a measured "no flow across this border". The table
+        # expresses "not published" by the row's absence, which is what this
+        # restores.
+        before = len(long_df)
+        long_df = long_df.dropna(subset=["flow_mw"])
+        gaps = before - len(long_df)
+        if gaps:
+            logger.warning(
+                f"{country_from}: dropped {gaps} unpublished hour(s) with no flow "
+                f"data after hourly resampling (of {before}); these are gaps, not zeros"
+            )
+
     return long_df[["timestamp_utc", "country_to", "flow_mw"]]
 
 
