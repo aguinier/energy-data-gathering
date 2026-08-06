@@ -75,14 +75,65 @@ COUNTRY_TO_NEIGHBOURS_KEYS = {
     #
     # It is NOT, on its own, the fix for the missing DE-DK/SE/NO borders --
     # DK_1, DK_2 and SE_4 were already in the list above and still returned
-    # nothing. See the note in query_crossborder_all about the query DOMAIN,
-    # which is the remaining half and is filed separately (ABL-35).
+    # nothing. That remaining half is the query DOMAIN, and it is fixed just
+    # below in CROSSBORDER_QUERY_DOMAINS (ABL-39).
     "DE": ["DE_LU"],
     "DK": ["DK_1", "DK_2"],
     "NO": ["NO_1", "NO_2", "NO_3", "NO_4", "NO_5"],
     "SE": ["SE_1", "SE_2", "SE_3", "SE_4"],
     "IE": ["IE_SEM"],
 }
+
+
+# Which DOMAIN a country's cross-border flows are queried under.
+#
+# Deliberately separate from COUNTRY_TO_NEIGHBOURS_KEYS above, and the
+# distinction is the whole point: that map answers "which borders exist", this
+# one answers "which EIC goes on the wire". Getting the first right and the
+# second wrong is exactly the state this repo was in -- DK_1, DK_2 and SE_4
+# sat in DE's neighbour list and still returned nothing, and the audit
+# (ABL-29) attributed that to the neighbour key alone.
+#
+# entsoe-py resolves a bare 'DE' to the German CONTROL AREA
+# (10Y1001A1001A83F). A11 physical flows are published per BIDDING-ZONE
+# border, so the control-area domain answers for some DE borders and not
+# others -- which reads as "that border does not exist" rather than as a bug.
+#
+# Measured against the Transparency Platform, 2026-08-01..05, every DE_LU
+# border under both domains (scripts/probe_entsoe_zones.py --flows), points
+# returned:
+#
+#   border   DE (control area)   DE_LU (bidding zone)
+#   AT                     384                    384   same
+#   BE                     177                    177   same
+#   CH                     384                    384   same
+#   CZ                     313                    313   same
+#   FR                      67                     67   same
+#   NL                     176                    176   same
+#   PL                     344                    344   same
+#   DK_1                     0                    213   RECOVERED
+#   DK_2                     0                    383   RECOVERED
+#   NO_2                     0                    133   RECOVERED
+#   SE_4                     0                      1   RECOVERED
+#
+# Seven borders identical, four recovered from nothing. The regression risk
+# that kept this unfixed through the previous pass is measured at zero rather
+# than argued -- the platform was under maintenance then and it could not be.
+#
+# Add an entry here only with that same both-domain measurement in hand. A
+# country absent from this map is queried under its plain 2-letter code, which
+# is what every other country has evidence for today.
+CROSSBORDER_QUERY_DOMAINS = {
+    "DE": "DE_LU",
+}
+
+
+def crossborder_query_domain(country_code: str) -> str:
+    """The domain to put on the wire for `country_code`'s A11 flow queries.
+
+    Pure, so the mapping is assertable without a network call.
+    """
+    return CROSSBORDER_QUERY_DOMAINS.get(country_code, country_code)
 
 
 # ============================================================================
@@ -1647,21 +1698,18 @@ class ENTSOEClient:
                 logger.warning(f"No neighbors found for {country_code}")
                 return None
 
-            # Query each border individually using 2-letter codes.
-            #
-            # KNOWN GAP (ABL-35): the domain passed here is the 2-letter
-            # `country_code`, and for Germany entsoe-py resolves 'DE' to the
-            # control-area EIC 10Y1001A1001A83F -- NOT the bidding zone DE_LU
-            # (10Y1001A1001A82H). Six DE borders land rows anyway (BE CH CZ FR
-            # NL PL) while DK_1, DK_2 and SE_4 return nothing despite being in
-            # the neighbour list, which is the signature of an A11 published
-            # per bidding-zone border rather than per control area. The
-            # net-position path already learned this exact lesson (see
-            # NET_POSITION_BIDDING_ZONES). Fixing it means a crossborder zone
-            # map, and it is not done here because it could regress the six
-            # borders that currently work and the Transparency Platform was
-            # under maintenance when this was written -- so it cannot be
-            # verified. The logging below is what makes the next run say so.
+            # Query each border individually, under the country's A11 query
+            # domain rather than its bare 2-letter code (ABL-39). For every
+            # country but DE the two are the same string; for DE the bare code
+            # resolves to the control area and silently loses four borders.
+            # The measurement is in CROSSBORDER_QUERY_DOMAINS' header.
+            domain = crossborder_query_domain(country_code)
+            if domain != country_code:
+                logger.info(
+                    f"{country_code}: querying cross-border flows under domain "
+                    f"{domain} (bidding zone), not the country code"
+                )
+
             series_dict = {}
             no_data: List[str] = []
             errored: List[str] = []
@@ -1670,11 +1718,11 @@ class ENTSOEClient:
                     self._rate_limit()
                     if export:
                         series = self.client.query_crossborder_flows(
-                            country_code, neighbor, start=start_ts, end=end_ts
+                            domain, neighbor, start=start_ts, end=end_ts
                         )
                     else:
                         series = self.client.query_crossborder_flows(
-                            neighbor, country_code, start=start_ts, end=end_ts
+                            neighbor, domain, start=start_ts, end=end_ts
                         )
                     if series is not None and not series.empty:
                         series_dict[neighbor] = series

@@ -21,6 +21,23 @@ Two hypotheses, and this tells them apart:
       15-minute-MTU go-live. The `--straddle` window brackets that date, and the
       `resolution` column in the output is what shows it.
 
+ANSWERED 2026-08-06: **(b), and (a) is refuted.** `IE_SEM` returns nothing at
+all -- including in the pre-break window `20250920..24` where plain `IE`
+returned 96 points -- so it is not a wrong key, and there is no bidding-zone
+map to write. Day by day over 2026-07-18..08-05, the control BE returns 96/96
+points every single day while GR and IE return **zero points on 17 of 19 days**,
+with the reason `No matching data found for Data item IMPLICIT_ALLOCATIONS_NE`.
+Across the straddle, BE flips PT60M -> PT15M exactly at 2025-10-01 while GR and
+IE simply stop. ENTSO-E no longer publishes A25 day-ahead net position for
+these two zones; nothing on our side recovers it.
+
+The consequence is the part that mattered. On the rare days GR *does* answer,
+it answers with **one Point of 0.0 for the whole day** -- and we stored 24
+hourly rows of 0.0, because entsoe-py forward-fills the positions a document
+carried no Point for. That is the ABL-50 mechanism in a second table, and it is
+where GR's 192 impossible zeros came from. They were manufactured here, not
+published upstream. See ABL-38.
+
 **Q2 (defect 2) -- why are DE's DK/SE/NO borders absent?**
 `COUNTRY_TO_NEIGHBOURS_KEYS["DE"]` is fixed (DE_AT_LU -> DE_LU, committed), but
 that was only half the story: DK_1, DK_2 and SE_4 were ALREADY in the old list
@@ -32,6 +49,13 @@ and prints which one answers.
 
 That change is deliberately NOT made blind: switching the domain could regress
 the six DE borders that do work today. Run this first.
+
+ANSWERED 2026-08-06, and the fix is committed (CROSSBORDER_QUERY_DOMAINS, ABL-39).
+Every DE_LU border, both domains, 2026-08-01..05: AT 384/384, BE 177/177,
+CH 384/384, CZ 313/313, FR 67/67, NL 176/176, PL 344/344 -- and DK_1 0/213,
+DK_2 0/383, NO_2 0/133, SE_4 0/1. Seven identical, four recovered, no
+regression. `--flows` is kept because it is how the next zone question gets
+settled, and re-running it is how you confirm the fix is still right.
 
 Usage:
     python scripts/probe_entsoe_zones.py --netpos
