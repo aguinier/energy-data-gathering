@@ -11,7 +11,7 @@ Wraps the entsoe-py library with:
 import time
 import logging
 from datetime import datetime
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 import pandas as pd
 import pytz
 import xml.etree.ElementTree as ET
@@ -55,7 +55,28 @@ def normalize_zone_to_country(zone_name: str) -> str:
 # For countries with multiple bidding zones, we query each zone separately
 # and combine results. For single-zone countries, the key equals the code.
 COUNTRY_TO_NEIGHBOURS_KEYS = {
-    "DE": ["DE_AT_LU"],   # DE_LU is a subset; DE_AT_LU covers main borders
+    # DE_AT_LU is the bidding zone that ceased to exist in October 2018, and
+    # the old comment here ("DE_LU is a subset; DE_AT_LU covers main borders")
+    # had it backwards in both halves. Measured against entsoe-py's own
+    # NEIGHBOURS map (2026-08-06):
+    #
+    #   DE_AT_LU (12): BE CH CZ DK_1 DK_2 FR IT_NORD IT_NORD_AT NL PL SE_4 SI
+    #   DE_LU    (11): AT BE CH CZ DK_1 DK_2 FR NL NO_2 PL SE_4
+    #
+    # DE_LU is not a subset: it adds AT and NO_2. What DE_AT_LU adds instead is
+    # IT_NORD, IT_NORD_AT and SI -- Austria's borders, inherited from the
+    # defunct combined zone. Germany does not border Italy or Slovenia, so
+    # those were three guaranteed-empty API calls per country per window.
+    #
+    # This change cannot regress: every border currently landing rows for DE
+    # (BE CH CZ FR NL PL, measured in crossborder_flows the same day) is in
+    # DE_LU too.
+    #
+    # It is NOT, on its own, the fix for the missing DE-DK/SE/NO borders --
+    # DK_1, DK_2 and SE_4 were already in the list above and still returned
+    # nothing. See the note in query_crossborder_all about the query DOMAIN,
+    # which is the remaining half and is filed separately (ABL-35).
+    "DE": ["DE_LU"],
     "DK": ["DK_1", "DK_2"],
     "NO": ["NO_1", "NO_2", "NO_3", "NO_4", "NO_5"],
     "SE": ["SE_1", "SE_2", "SE_3", "SE_4"],
@@ -1613,8 +1634,24 @@ class ENTSOEClient:
                 logger.warning(f"No neighbors found for {country_code}")
                 return None
 
-            # Query each border individually using 2-letter codes
+            # Query each border individually using 2-letter codes.
+            #
+            # KNOWN GAP (ABL-35): the domain passed here is the 2-letter
+            # `country_code`, and for Germany entsoe-py resolves 'DE' to the
+            # control-area EIC 10Y1001A1001A83F -- NOT the bidding zone DE_LU
+            # (10Y1001A1001A82H). Six DE borders land rows anyway (BE CH CZ FR
+            # NL PL) while DK_1, DK_2 and SE_4 return nothing despite being in
+            # the neighbour list, which is the signature of an A11 published
+            # per bidding-zone border rather than per control area. The
+            # net-position path already learned this exact lesson (see
+            # NET_POSITION_BIDDING_ZONES). Fixing it means a crossborder zone
+            # map, and it is not done here because it could regress the six
+            # borders that currently work and the Transparency Platform was
+            # under maintenance when this was written -- so it cannot be
+            # verified. The logging below is what makes the next run say so.
             series_dict = {}
+            no_data: List[str] = []
+            errored: List[str] = []
             for neighbor in sorted(all_neighbors):
                 try:
                     self._rate_limit()
@@ -1628,14 +1665,27 @@ class ENTSOEClient:
                         )
                     if series is not None and not series.empty:
                         series_dict[neighbor] = series
+                    else:
+                        no_data.append(neighbor)
                 except Exception as e:
+                    # Both branches used to be logger.debug, and the deployed
+                    # level is INFO -- so a border that died upstream was
+                    # invisible, and a border we have NEVER been able to fetch
+                    # (DE-DK, DE-SE, DE-NO) looked exactly like one that does
+                    # not exist. Silence was the reason those went unnoticed
+                    # long enough to reach a data audit.
                     if "No matching data" in str(e) or "NoMatchingDataError" in type(e).__name__:
+                        no_data.append(neighbor)
                         logger.debug(f"No flow data {country_code}->{neighbor}: {e}")
                     else:
-                        logger.debug(f"Error querying {country_code}->{neighbor}: {e}")
+                        errored.append(neighbor)
+                        logger.warning(f"Error querying {country_code}->{neighbor}: {e}")
 
             if not series_dict:
-                logger.warning(f"No crossborder flow data for {country_code}")
+                logger.warning(
+                    f"No crossborder flow data for {country_code} across any of "
+                    f"{len(all_neighbors)} border(s): {', '.join(sorted(all_neighbors))}"
+                )
                 return None
 
             df = pd.DataFrame(series_dict)
@@ -1645,6 +1695,19 @@ class ENTSOEClient:
                 f"({'export' if export else 'import'}): "
                 f"{len(df)} rows, {len(df.columns)} borders"
             )
+            # Named at INFO, not counted at DEBUG: "3 borders missing" needs a
+            # log dive to act on, "DK_1, DK_2, SE_4 returned nothing" is
+            # actionable from the line itself.
+            if no_data:
+                logger.info(
+                    f"{country_code}: no data on {len(no_data)} of "
+                    f"{len(all_neighbors)} border(s): {', '.join(no_data)}"
+                )
+            if errored:
+                logger.warning(
+                    f"{country_code}: {len(errored)} border(s) failed with an error "
+                    f"(not a no-data response): {', '.join(errored)}"
+                )
             return df
 
         except Exception as e:

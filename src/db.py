@@ -1032,12 +1032,34 @@ def upsert_crossborder_flows(
         return 0, 0
 
     records_affected = 0
+    skipped = 0
 
     with get_connection() as conn:
         cursor = conn.cursor()
 
         for _, row in df.iterrows():
-            ts_str = utils.format_timestamp_for_db(row["timestamp_utc"]) if pd.notna(row["timestamp_utc"]) else None
+            # A row with no value or no timestamp is skipped HERE, one row at a
+            # time, rather than being handed to the INSERT as a None.
+            #
+            # `flow_mw` and `timestamp_utc` are both NOT NULL. Passing None
+            # raised an IntegrityError, and get_connection() answers any
+            # exception by rolling the whole connection back -- so a single
+            # unpublished hour discarded every row already written for this
+            # country in this window, and the caller saw one "error fetching"
+            # line rather than "the batch you thought landed did not". The
+            # failure is now partial (this row) and loud (a WARNING naming the
+            # count), which is what ABL-35 asked for.
+            #
+            # fetch_crossborder_flows._normalize_wide_to_long already drops
+            # these upstream; this is the backstop for every other caller and
+            # for any future path that skips it. Skipped, never defaulted: an
+            # hour ENTSO-E did not publish is unknown, and 0.0 would assert a
+            # measured "no flow across this border".
+            if not pd.notna(row["flow_mw"]) or not pd.notna(row["timestamp_utc"]):
+                skipped += 1
+                continue
+
+            ts_str = utils.format_timestamp_for_db(row["timestamp_utc"])
             cursor.execute(
                 """
                 INSERT OR REPLACE INTO crossborder_flows
@@ -1049,10 +1071,17 @@ def upsert_crossborder_flows(
                     country_from,
                     row["country_to"],
                     ts_str,
-                    float(row["flow_mw"]) if pd.notna(row["flow_mw"]) else None,
+                    float(row["flow_mw"]),
                 ),
             )
             records_affected += cursor.rowcount
+
+    if skipped:
+        logger.warning(
+            f"Skipped {skipped} crossborder flow row(s) from {country_from} with a "
+            f"missing value or timestamp; {records_affected} row(s) still written. "
+            f"An unpublished hour is a gap, not a zero, so it is not stored."
+        )
 
     logger.info(f"Upserted {records_affected} crossborder flow records from {country_from}")
     return records_affected, 0
