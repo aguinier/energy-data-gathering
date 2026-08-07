@@ -4,6 +4,29 @@
 30 13 * * * cd /app && /usr/local/bin/python3 scripts/update.py >> /app/logs/cron_update.log 2>&1
 30 18 * * * cd /app && /usr/local/bin/python3 scripts/update.py >> /app/logs/cron_update.log 2>&1
 
+# Day-ahead PRICE only, right after the SDAC market-coupling publication.
+# The auction publishes the whole of the next market day at ~12:45 Brussels
+# local, which is 10:45 UTC under CEST and 11:45 UTC under CET — hence two
+# lines rather than one: 11:15 catches the summer publication promptly, 12:15
+# catches the winter one and doubles as a retry for the summer.
+#
+# Without these the first pass that can see tomorrow's price is the 13:30 full
+# update, and it is the ONLY one before evening. On 2026-08-06 that pass was
+# wiped out by an ENTSO-E outage — 484 HTTP 503s, 0 of 30 countries stored,
+# every document type — and tomorrow's price was absent from the dashboard
+# until 18:35. Two cheap independent attempts ahead of it stop a single
+# transient upstream failure from being an 8-hour hole in the most-read number
+# on the board. Measured cost: A44 for ~30 countries at ~1.8s each, so ~90s.
+#
+# `--types price` is enough to turn D+1 fetching on: update.py auto-enables
+# include_dayahead from config's is_dayahead flags and price carries one.
+# The other three day-ahead types (load_forecast_day_ahead, wind_solar_forecast,
+# net_position) have the same exposure and are deliberately NOT here yet —
+# adding them is a one-word change, pending a call on the extra runtime.
+# See ABL-54 / ABL-51.
+15 11 * * * cd /app && /usr/local/bin/python3 scripts/update.py --types price --days 2 >> /app/logs/cron_update.log 2>&1
+15 12 * * * cd /app && /usr/local/bin/python3 scripts/update.py --types price --days 2 >> /app/logs/cron_update.log 2>&1
+
 # Weather data + forecasts (daily at 15:00 UTC) — legacy `weather_data` table
 0 15 * * * cd /app && /usr/local/bin/python3 scripts/update_weather.py --forecast >> /app/logs/cron_weather.log 2>&1
 
