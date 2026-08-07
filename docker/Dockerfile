@@ -19,7 +19,8 @@ COPY scripts/ scripts/
 # where `python -m pytest tests/` can actually run against real deps.
 COPY tests/ tests/
 
-# Install crontab: 00:30, 06:30, 13:30, 18:30
+# Install crontab. Full updates at 00:30, 06:30, 13:30, 18:30 UTC, plus a
+# price-only day-ahead pass at 11:15 and 12:15 UTC — see docker/crontab.
 COPY docker/crontab /etc/cron.d/energy-data
 RUN chmod 0644 /etc/cron.d/energy-data && crontab /etc/cron.d/energy-data
 
