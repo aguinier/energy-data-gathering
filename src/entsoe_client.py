@@ -1882,6 +1882,23 @@ class ENTSOEClient:
                 logger.warning(f"No net position data for {country_code}")
                 return None, None
 
+            # Same defect as ABL-50, in a second table. GR's A25 document for
+            # 2026-07-24 declares PT60M over 24 positions and carries ONE
+            # Point -- position 1, quantity 0 -- which entsoe-py forward-fills
+            # into 24 rows of 0.0 MW. We stored all 24 as realized net
+            # position while GR's own crossborder flows showed a median net
+            # export of 1,142 MW. 192 GR rows and 24 IE rows came from this.
+            # Only rows that are BOTH unpublished AND exactly 0.0 are refused:
+            # PT and ES legitimately hold an interconnector at 500/1500 MW for
+            # hours behind a single Point, and those fills are kept. ABL-55.
+            series, _ = published_points.drop_unpublished_zeros_series(
+                series, raw_xml, label=f"{country_code} net position"
+            )
+
+            if series is None or series.empty:
+                logger.warning(f"No published net position data for {country_code}")
+                return None, None
+
             logger.info(f"Retrieved {len(series)} net position records for {country_code} (published: {publication_time})")
             return series, publication_time
 

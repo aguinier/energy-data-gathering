@@ -703,6 +703,54 @@ already downloaded for the publication timestamp, so the one-fetch-per-country-p
 invariant holds (`test_only_one_upstream_request_per_leg`). No schema change,
 and no existing row was backfilled or deleted.
 
+#### Second occurrence: net position (ABL-55)
+
+The same mechanism ran in the A25 day-ahead net-position path.
+`query_net_position_data_with_metadata` now applies the same rule through
+`published_points.drop_unpublished_zeros_series` — the Series shape entsoe-py
+returns for net position — so both tables are governed by one module rather
+than two reimplementations. Tests: `tests/test_net_position_published_points.py`.
+
+Measured against the live API on 2026-08-07, all `curveType=A03`:
+
+| zone / day | declared | Points | stored before | stored after |
+|---|---:|---:|---:|---:|
+| GR 2026-07-24 | 24 (`PT60M`) | **1** (`quantity=0`) | 24 × `0.0` | **1** |
+| GR 2026-03-14 | 24 (`PT60M`) | **1** (`quantity=0`) | 24 × `0.0` | **1** |
+| IE 2026-03-14 | 24 (`PT60M`) | **1** (`quantity=0`) | 24 × `0.0` | **1** |
+| IE 2026-07-24 | 24 (`PT60M`) | 24 | 24 | 24 |
+| PT 2026-02-18 | 112 (`PT15M`) | sparse (7/47, 2/18) | 112 | 112 |
+| ES 2026-02-08 | 112 (`PT15M`) | 51 | 112 | 112 |
+| BE 2026-08-05 | 112 (`PT15M`) | 112 | 112 | 112 |
+
+192 GR rows and 24 IE rows in `net_position` were manufactured this way, while
+GR's own `crossborder_flows` showed a median net **export of 1,142 MW** over
+the same hours.
+
+**"Store only genuinely published Points" was proposed and is refuted.** It was
+the obvious reading of the defect and it would have deleted real data. A25
+documents are routinely and legitimately sparse under A03: PT 2026-02-18 has a
+`Period` declaring 47 positions carrying 7 Points, and another declaring 18
+carrying 2 — PT's interconnector sits at exactly 500 MW or 1500 MW for hours
+and the document encodes the hold as one Point. That rule would have dropped
+**more than half** of PT's and ES's genuine rows.
+`test_pt_flat_interconnector_is_untouched` pins this. The zero half of the rule
+is what separates GR's manufactured day from PT's flat interconnector: both are
+forward-filled, only one is exactly `0.0`.
+
+**Forward-looking impact, measured over 2026-07-31..08-07 across all 22 zones
+in the table: 33 of 13,440 rows (0.25%), all of them PL.** Every other zone is
+byte-identical; GR and IE now return no A25 at all (ABL-38). PL is the one zone
+that genuinely publishes single-Point zero periods on otherwise-real days —
+e.g. 2024-04-13 carries a `Period` declaring 14 positions with one Point,
+`quantity=0`. Its published zeros are kept and only the fills are refused, and
+its zero density is falling anyway (1,612 rows in 2023 → 166 in 2026).
+
+Note this corrects a premise recorded on ABL-55 from stored rows alone: PL's
+4,137 exact-`0.0` rows were assumed to be genuinely published, and the raw XML
+shows a large share of them are our own forward-fill. That is why the rule was
+measured against the documents rather than the table.
+
 ### Completeness Cache
 
 The `completeness_cache` table stores pre-computed data quality metrics:
