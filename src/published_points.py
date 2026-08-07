@@ -48,6 +48,36 @@ Everything fails open. If the XML cannot be parsed, or declares no usable
 period, or lands on a grid that matches none of the returned rows, every row
 is kept and a warning is logged -- a parser that silently deleted real
 readings would be a worse defect than the one it fixes.
+
+**Second occurrence: net position (ABL-55).** The same mechanism ran in the
+A25 day-ahead net-position path. Measured against the live API on 2026-08-07,
+GR's document for `2026-07-23T22:00Z .. 2026-07-24T22:00Z` declares
+`resolution=PT60M` over 24 hourly positions and carries **one** Point --
+`position 1, quantity 0`. We stored a full day of measured-looking 0.0 MW,
+while GR's own crossborder flows show a median net export of 1,142 MW over
+those hours. 192 GR rows and 24 IE rows in `net_position` were manufactured
+this way. `drop_unpublished_zeros_series` is the same rule in the shape that
+path uses, so both tables are now governed by this one module rather than by
+two reimplementations.
+
+**Why net position is NOT filtered down to "only the published Points".**
+That stricter rule was the first proposal, and the live API refutes it. A25
+documents are routinely and legitimately sparse under A03 -- measured
+2026-08-07, all `curveType=A03`:
+
+    PT 2026-02-18  Period declaring 47 positions, carrying  7 Points
+    PT 2026-02-18  Period declaring 18 positions, carrying  2 Points
+    ES 2026-02-08  Period declaring 112 positions, carrying 51 Points
+    FI 2026-02-01  Period declaring 112 positions, carrying 109 Points
+    BE 2026-02-01  Period declaring 112 positions, carrying 112 Points
+
+PT's interconnector sits at exactly 500 MW or 1500 MW for hours at a time and
+the document encodes that as one Point plus a hold. Dropping every
+forward-filled position would delete more than half of PT's and ES's genuine
+rows -- real readings, silently removed, which is the failure this module
+exists to prevent. The zero half of the rule is what separates GR's
+manufactured day from PT's flat interconnector: both are forward-filled, only
+one is exactly 0.0.
 """
 
 from __future__ import annotations
@@ -223,3 +253,48 @@ def drop_unpublished_zeros(
         "ENTSO-E published no Point for and that forward-filled to exactly 0"
     )
     return df[~invented_zero].reset_index(drop=True), dropped
+
+
+def drop_unpublished_zeros_series(
+    series: Optional[pd.Series],
+    xml_response: Optional[str],
+    label: str = '',
+) -> Tuple[Optional[pd.Series], int]:
+    """
+    `drop_unpublished_zeros` for a timestamp-indexed Series.
+
+    entsoe-py returns net position as a Series rather than a frame, so this
+    exists to keep the rule itself in one place instead of reimplementing it
+    per call site. Same rule, same fail-open behaviour; the only additions are
+    normalising the index to UTC and putting it back afterwards.
+
+    Args:
+        series: Series as returned by entsoe-py, indexed by timestamp
+        xml_response: The raw XML for the same request
+        label: Free-text context for log lines, e.g. a country code
+
+    Returns:
+        (series, number_of_rows_dropped), the index converted to UTC. The
+        series is returned unchanged whenever nothing is dropped.
+    """
+    if series is None or series.empty:
+        return series, 0
+
+    index = pd.DatetimeIndex(series.index)
+    index = index.tz_localize('UTC') if index.tz is None else index.tz_convert('UTC')
+
+    # The frame form needs a column name; the Series may not have one.
+    column = 'value'
+    frame = pd.DataFrame({'timestamp_utc': index, column: series.to_numpy()})
+
+    frame, dropped = drop_unpublished_zeros(frame, xml_response, column, label=label)
+    if dropped == 0:
+        return series, 0
+
+    kept = pd.Series(
+        frame[column].to_numpy(),
+        index=pd.DatetimeIndex(frame['timestamp_utc']),
+        name=series.name,
+    )
+    kept.index.name = series.index.name
+    return kept, dropped
