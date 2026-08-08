@@ -123,6 +123,53 @@ COUNTRY_TO_NEIGHBOURS_KEYS = {
 # Add an entry here only with that same both-domain measurement in hand. A
 # country absent from this map is queried under its plain 2-letter code, which
 # is what every other country has evidence for today.
+#
+# ---------------------------------------------------------------------------
+# DK, NO and SE have the same defect, and this map CANNOT express their fix.
+# ---------------------------------------------------------------------------
+# Measured 2026-08-08, same method and same window (2026-08-01..05). An audit of
+# every country's stored borders against entsoe-py's NEIGHBOURS found 18 with
+# zero rows; probing each under the bare country code and under each of the
+# country's own bidding zones splits them cleanly:
+#
+#   border        bare domain    bidding zone that answers
+#   DK -> DE               0     DK_1 270  AND  DK_2 342
+#   DK -> GB               0     DK_1 181
+#   DK -> NO               0     DK_1 135   (NO_2)
+#   DK -> SE               0     DK_1 15 (SE_3)  AND  DK_2 30 (SE_4)
+#   NO -> DE               0     NO_2 246
+#   NO -> DK               0     NO_2 262   (DK_1)
+#   NO -> SE               0     NO_1 1 (SE_3), NO_3 97 (SE_2),
+#                                NO_4 383 (SE_1), NO_4 337 (SE_2)
+#   SE -> DE               0     SE_4 1
+#   SE -> DK               0     SE_3 289 (DK_1)  AND  SE_4 358 (DK_2)
+#   SE -> NO               0     SE_1 6 (NO_4), SE_2 305 (NO_3),
+#                                SE_2 52 (NO_4), SE_3 384 (NO_1)
+#
+# Stored today: DK has 1 of its 5 borders (NL only), NO 3 of 6, SE 3 of 6. The
+# ones present are exactly the borders whose neighbour is a single-zone country
+# (NL, FI, GB, LT, PL); every missing one faces a multi-zone bidding zone.
+#
+# **Do not "fix" this by adding "DK": "DK_1" here.** This map is country -> ONE
+# domain string, which is right for DE because DE_LU is a single zone. DK is two
+# zones, SE four, NO five, and the rows are split across them: DK->DE is
+# genuinely DK_1->DE_LU (Jutland) PLUS DK_2->DE_LU (Kontek). Picking one zone
+# stores one link's flow under the label of the whole border -- a number that is
+# wrong rather than missing, which is the worse of the two failures.
+#
+# The real fix is country -> LIST of source domains, iterated in
+# query_crossborder_all, with the results SUMMED where two source zones return
+# the same neighbour. Note `series_dict[neighbor] = series` there is keyed by
+# neighbour alone and would silently overwrite on exactly that collision.
+# Filed separately; see ABL-39's child issue.
+#
+# Not recoverable, measured the same day and listed so they are not re-probed:
+# GR -> IT (0 under both IT_BRNN and IT_GR) and RS -> AL (0) are upstream
+# silence, and SI -> DE is a phantom -- it exists only because SI's neighbour
+# list still names the defunct DE_AT_LU combined zone, and Germany does not
+# border Slovenia. GB is a third thing again: GB -> DK_1 answers with 81 points
+# under the bare GB domain, but every GB border stops at 2023-07-31, so GB is
+# not being fetched at all rather than being fetched wrongly.
 CROSSBORDER_QUERY_DOMAINS = {
     "DE": "DE_LU",
 }
