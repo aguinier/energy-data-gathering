@@ -57,6 +57,33 @@ DK_2 0/383, NO_2 0/133, SE_4 0/1. Seven identical, four recovered, no
 regression. `--flows` is kept because it is how the next zone question gets
 settled, and re-running it is how you confirm the fix is still right.
 
+RE-CONFIRMED 2026-08-08 against the live platform: DE->FR 67/67 (unchanged
+under both domains), DE->DK_1 0/213, DE->SE_4 0/1. The fix still holds.
+
+**How much history the backfill has to cover.** The fix only changes what the
+NEXT fetch collects; DE's DK/SE/NO past is still absent, and the instruction
+"backfill DE's DK/SE/NO history" was open-ended until measured. One sample week
+per period, DE_LU -> border, points returned (FR is the control -- it has rows
+in our database throughout, so an empty FR would mean the platform, not the
+border):
+
+    period        AT   DK_1   DK_2   NO_2   SE_4     FR
+    2023-01      672    593    360    463     74     92
+    2024-01      672    278    519     74     23     89
+    2025-01      672    419    240    113     11     49
+    2025-07      672    165    253    105     28     10
+    2026-01      672    353    480    158     85    109
+    2026-07      672    466    576    254      1    118
+
+Every recovered border answers for every period back to 2023-01, which is where
+`scripts/backfill_crossborder.py` starts. So the backfill is bounded and fully
+available: DE only, 2023-01 -> now, the four recovered borders plus AT. Nothing
+has aged out of the Transparency Platform's retention.
+
+Note the point counts vary by three orders of magnitude between borders in the
+same week (AT 672, SE_4 1). That is A11's variable-length positions, not a
+coverage signal -- do not read a low count as a broken border.
+
 Usage:
     python scripts/probe_entsoe_zones.py --netpos
     python scripts/probe_entsoe_zones.py --netpos --straddle
