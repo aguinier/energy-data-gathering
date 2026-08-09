@@ -22,6 +22,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 import config
 import utils
 from . import published_points
+from . import log_redaction
 
 
 logger = logging.getLogger('entsoe_pipeline')
@@ -223,6 +224,15 @@ class ENTSOEClient:
         if not self.api_key:
             raise ValueError("ENTSO-E API key not provided")
 
+        # entsoe-py puts this key in every request URL, and `requests` puts
+        # that URL in every HTTPError message. Register the literal value and
+        # install the log filter here rather than in one logging entry point:
+        # the scripts configure logging three different ways, but every path
+        # that can leak the key builds one of these. See src/log_redaction.py
+        # (ABL-86).
+        log_redaction.register_secret_value(self.api_key)
+        log_redaction.install_secret_redaction()
+
         # Initialize entsoe-py clients
         self.client = EntsoePandasClient(api_key=self.api_key)
         self.raw_client = EntsoeRawClient(api_key=self.api_key)
@@ -268,19 +278,29 @@ class ENTSOEClient:
             logger.debug(f"Request successful: {method.__name__}")
             return result
 
+        # Every ENTSO-E request in this module goes through here, so this is
+        # the one place the credential can enter an exception message. Scrub
+        # each exception in place BEFORE it is logged or re-wrapped: that
+        # covers the traceback the interpreter prints for an uncaught error,
+        # which no logging filter ever sees, and it stops the raw URL being
+        # copied into the ENTSOEClientError we raise from it. (ABL-86)
         except NoMatchingDataError as e:
+            log_redaction.redact_exception(e)
             logger.warning(f"No data available: {e}")
             raise ENTSOENoDataError(f"No data available: {e}") from e
 
         except InvalidPSRTypeError as e:
+            log_redaction.redact_exception(e)
             logger.error(f"Invalid PSR type: {e}")
             raise ENTSOEClientError(f"Invalid PSR type: {e}") from e
 
         except PaginationError as e:
+            log_redaction.redact_exception(e)
             logger.error(f"Pagination error: {e}")
             raise ENTSOEClientError(f"Pagination error: {e}") from e
 
         except Exception as e:
+            log_redaction.redact_exception(e)
             logger.error(f"API request failed: {utils.format_error(e)}")
             raise ENTSOEClientError(f"API request failed: {e}") from e
 

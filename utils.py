@@ -11,6 +11,7 @@ from typing import Optional, Tuple, List
 import pandas as pd
 
 import config
+from src.log_redaction import install_secret_redaction, redact_secrets
 
 
 # ============================================================================
@@ -57,6 +58,12 @@ def setup_logging(log_level: str = None, log_file: Path = None):
     file_formatter = logging.Formatter(config.LOG_FORMAT)
     file_handler.setFormatter(file_formatter)
     logger.addHandler(file_handler)
+
+    # Credentials must never reach either handler. A failed ENTSO-E request
+    # raises an exception whose message is the full request URL, securityToken
+    # and all, and this logger's output is exactly what cron appends to
+    # cron_update.log. See src/log_redaction.py (ABL-86).
+    install_secret_redaction(logging.getLogger(), logger)
 
     return logger
 
@@ -384,15 +391,19 @@ def format_error(error: Exception, context: str = "") -> str:
     """
     Format error message for logging
 
+    The message is redacted before it is returned: `requests` builds an
+    HTTPError's text out of the full request URL, which carries our ENTSO-E
+    securityToken. See src/log_redaction.py (ABL-86).
+
     Args:
         error: Exception object
         context: Additional context string
 
     Returns:
-        Formatted error message
+        Formatted error message, with any credential replaced by `<redacted>`
     """
     error_type = type(error).__name__
-    error_msg = str(error)
+    error_msg = redact_secrets(str(error))
 
     if context:
         return f"{context}: {error_type}: {error_msg}"
