@@ -281,6 +281,52 @@ api_key_entsoe=your_api_key_here
 - `logs/pipeline.log` - All pipeline activity
 - `logs/cron_update.log` - Cron job output
 
+**Credentials are scrubbed out of both, and that is not optional** (ABL-86).
+entsoe-py puts the API key in the request URL as `securityToken=`, and
+`requests` builds an `HTTPError`'s message out of the **full** URL — so every
+failed request handed us an exception whose `str()` was our credential, and
+each of the ~128 `logger.error(f"...: {e}")` sites wrote it verbatim into these
+two files. On prod they are ~215 MB and ~70 MB, owned by root, rotate slowly,
+and exist to be tailed and pasted into diagnostics. The key was at rest in
+cleartext and travelled into every shared excerpt.
+
+`src/log_redaction.py` is the fix, and it is deliberately **central** — the
+string we must not print is one we never construct, so a rule at the call site
+would have to be remembered at all 128 of them and at the 129th. Four ways in,
+because no single one covers everything:
+
+- `redact_secrets()` rewrites `<name>=<value>` for any name in
+  `SECRET_QUERY_PARAMS`, plus the quoted mapping form entsoe-py logs at DEBUG.
+  Needs no knowledge of the key, so it works in a test and after a rotation.
+- `register_secret_value()` scrubs a literal value in *any* shape.
+  `ENTSOEClient.__init__` registers the key it was handed
+  (`src/entsoe_client.py:233`).
+- `SecretRedactingFilter`, installed by `install_secret_redaction()` on the
+  **handlers** of the root and `entsoe_pipeline` loggers — a handler filter
+  sees every record reaching it, including entsoe-py's and urllib3's, which a
+  logger filter would not. Called from `utils.setup_logging()` and from
+  `ENTSOEClient.__init__`, because the scripts configure logging three
+  different ways (`setup_logging`, `logging.basicConfig`, not at all).
+- `redact_exception()` at `_make_request`'s four except branches
+  (`src/entsoe_client.py:288`, `:293`, `:298`, `:303`), rewriting `args` in
+  place — every ENTSO-E request in the module funnels through there. The only
+  thing covering an **uncaught** exception: the interpreter prints that
+  traceback to stderr itself, and cron's `2>&1` puts it in the same file. It
+  walks `__cause__`/`__context__` too, since `raise ... from e` prints the
+  original `requests.HTTPError` underneath ours.
+
+Verified 2026-08-09 with a deliberately invalid token against the live API: the
+401 reaches `logs/`, stdout, the raised exception, its chained cause and the
+uncaught 16-frame traceback as `securityToken=<redacted>`, with
+`documentType`, `outBiddingZone_Domain` and `periodStart` all intact. **Keeping
+the rest of the URL is a requirement, not an accident** — scrubbing the whole
+URL would close the hole by making the log useless, and the log is how ABL-84
+was diagnosed. `tests/test_log_redaction.py` pins both halves.
+
+Two things this does **not** do, both escalated to the Board on ABL-86: it does
+not scrub the log files already written on prod, and it does not rotate the
+key. Treat the existing prod logs as still containing the credential.
+
 **Database Logging:**
 ```sql
 -- Check recent pipeline runs
