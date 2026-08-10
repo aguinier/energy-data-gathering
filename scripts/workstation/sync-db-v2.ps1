@@ -44,6 +44,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+# This runs unattended (-WindowStyle Hidden) via a scheduled task: any
+# ShouldProcess confirmation prompt hangs forever with no one to answer it.
+$ConfirmPreference = "None"
 
 $RemoteUser   = "clavain"
 $RemoteHost   = "192.168.86.36"
@@ -119,7 +122,7 @@ print(f'DELTA_ROWS={n}')
             }
 
             Write-Host "[$(& $Stamp)] Transferring weather delta ($deltaRows rows, $([math]::Round($deltaBytes/1GB,2)) GB) ..."
-            if (Test-Path $LocalDelta) { Remove-Item $LocalDelta -Force }
+            if (Test-Path $LocalDelta) { Remove-Item $LocalDelta -Force -Confirm:$false }
             scp "${Target}:$RemoteDelta" $LocalDelta
             if ($LASTEXITCODE -ne 0) { throw "scp failed (exit $LASTEXITCODE)" }
 
@@ -187,7 +190,7 @@ print(f'REFRESH_TABLES={len(tables)}')
         $refOut | ForEach-Object { Write-Host "  $_" }
 
         Write-Host "[$(& $Stamp)] Transferring refresh export ..."
-        if (Test-Path $LocalRefresh) { Remove-Item $LocalRefresh -Force }
+        if (Test-Path $LocalRefresh) { Remove-Item $LocalRefresh -Force -Confirm:$false }
         scp "${Target}:$RemoteRefresh" $LocalRefresh
         if ($LASTEXITCODE -ne 0) { throw "scp failed (exit $LASTEXITCODE)" }
 
@@ -239,7 +242,7 @@ finally {
     $sshOpts = @('-o','BatchMode=yes','-o','ConnectTimeout=10','-o','ServerAliveInterval=5','-o','ServerAliveCountMax=3')
     ssh @sshOpts $Target "rm -f $RemoteDelta $RemoteDelta-wal $RemoteDelta-shm $RemoteRefresh $RemoteRefresh-wal $RemoteRefresh-shm" 2>$null | Out-Null
     foreach ($f in @($LocalDelta, "$LocalDelta-wal", "$LocalDelta-shm", $LocalRefresh, "$LocalRefresh-wal", "$LocalRefresh-shm")) {
-        if (Test-Path $f) { Remove-Item $f -Force }
+        if (Test-Path $f) { Remove-Item $f -Force -Confirm:$false }
     }
     Stop-Transcript | Out-Null
 }
