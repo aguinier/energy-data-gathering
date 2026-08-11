@@ -324,6 +324,57 @@ def test_fetch_net_position_data_passes_publication_time_to_upsert(monkeypatch):
     assert upsert_args[1]["publication_timestamp"] == publication_time
 
 
+def test_fetch_net_position_data_skips_lu_without_calling_client(monkeypatch):
+    """ABL-35 defect 4: LU and DE both resolve to the DE_LU bidding zone
+    (NET_POSITION_BIDDING_ZONES), so a separate LU fetch would write a
+    byte-identical duplicate of whatever DE already wrote, double-counting DE
+    in every per-country net_position aggregate. Board-approved fix
+    (confirmation 820fa10c, accepted 2026-08-11): skip LU entirely, before any
+    API call -- not merely dedupe after fetching."""
+    from src.entsoe_client import ENTSOEClient
+
+    mock_client = MagicMock()
+    mock_client.NET_POSITION_DUPLICATE_ZONE_COUNTRIES = ENTSOEClient.NET_POSITION_DUPLICATE_ZONE_COUNTRIES
+    mock_client.NET_POSITION_BIDDING_ZONES = ENTSOEClient.NET_POSITION_BIDDING_ZONES
+
+    upsert_mock = MagicMock()
+    monkeypatch.setattr(db, "create_net_position_table", MagicMock())
+    monkeypatch.setattr(db, "upsert_net_position", upsert_mock)
+
+    inserted, updated, failed = fetch_net_position.fetch_net_position_data(
+        mock_client, "LU",
+        pd.Timestamp("2026-07-25T00:00:00Z"), pd.Timestamp("2026-07-25T02:00:00Z"),
+    )
+
+    assert (inserted, updated, failed) == (0, 0, 0)
+    mock_client.query_net_position_data_with_metadata.assert_not_called()
+    assert not upsert_mock.called
+
+
+def test_fetch_net_position_data_still_fetches_de(monkeypatch):
+    """DE must be unaffected by the LU skip -- DE is the country whose fetch
+    has to keep happening, since it's the one that actually writes the
+    DE_LU zone's series."""
+    series = _series()
+    publication_time = pd.Timestamp("2026-07-25T10:00:00Z")
+
+    mock_client = MagicMock()
+    mock_client.NET_POSITION_DUPLICATE_ZONE_COUNTRIES = {"LU"}
+    mock_client.query_net_position_data_with_metadata.return_value = (series, publication_time)
+
+    monkeypatch.setattr(db, "create_net_position_table", MagicMock())
+    monkeypatch.setattr(db, "upsert_net_position", MagicMock(return_value=(2, 0)))
+
+    inserted, updated, failed = fetch_net_position.fetch_net_position_data(
+        mock_client, "DE",
+        pd.Timestamp("2026-07-25T00:00:00Z"), pd.Timestamp("2026-07-25T02:00:00Z"),
+    )
+
+    assert (inserted, updated, failed) == (2, 0, 0)
+    mock_client.query_net_position_data_with_metadata.assert_called_once()
+    db.upsert_net_position.assert_called_once()
+
+
 def test_fetch_net_position_data_no_series_skips_upsert(monkeypatch):
     mock_client = MagicMock()
     mock_client.query_net_position_data_with_metadata.return_value = (None, None)

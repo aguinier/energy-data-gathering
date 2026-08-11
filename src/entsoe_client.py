@@ -1991,6 +1991,27 @@ class ENTSOEClient:
         'LU': 'DE_LU',   # LU is inside the DE_LU bidding zone
     }
 
+    # Countries whose net position, per NET_POSITION_BIDDING_ZONES above, resolves
+    # to a zone another country's own fetch already writes in full. Net position
+    # is additive per zone (unlike a price, which is intensive), so a second
+    # country_code writing the same zone's series is not a second data point --
+    # it is DE's own series double-counted under a second label. Verified
+    # 2026-08-06: LU's stored net_position was byte-identical to DE's for every
+    # shared timestamp. Board-approved fix, ABL-35 defect 4 (confirmation
+    # 820fa10c, accepted 2026-08-11): stop writing NEW rows for these countries;
+    # fetch_net_position.fetch_net_position_data() skips them before calling the
+    # API at all. The rows already stored under country_code='LU' (459 as of
+    # 2026-08-10) are deliberately left untouched here -- deleting stored rows is
+    # a separate, still-open database-write policy question (ABL-67), and the
+    # dashboard already reads them through a LU -> DE_LU alias rather than as a
+    # second country's series.
+    # Do NOT add 'DE' here: DE is the country whose fetch must keep happening.
+    # Do NOT copy this to PRICE_BIDDING_ZONES below: LU's identical DE_LU price
+    # mapping is correct, because a price is intensive, not additive -- LU
+    # genuinely trades at the DE-LU price and de-duplicating it would delete a
+    # correct value, not a manufactured one.
+    NET_POSITION_DUPLICATE_ZONE_COUNTRIES = {'LU'}
+
     # Bidding zone mappings for price data
     # Some countries use different bidding zones for price vs load data
     PRICE_BIDDING_ZONES = {

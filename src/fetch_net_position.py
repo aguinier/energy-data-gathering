@@ -38,6 +38,17 @@ def fetch_net_position_data(
     Returns:
         Tuple of (records_inserted, records_updated, records_failed)
     """
+    if country_code in client.NET_POSITION_DUPLICATE_ZONE_COUNTRIES:
+        zone = client.NET_POSITION_BIDDING_ZONES.get(country_code, country_code)
+        logger.info(
+            f"Skipping net position fetch for {country_code}: its bidding zone "
+            f"({zone}) is already fetched and stored under a different "
+            f"country_code, so a separate {country_code} fetch would write a "
+            f"byte-identical duplicate that double-counts that zone (ABL-35 "
+            f"defect 4)."
+        )
+        return 0, 0, 0
+
     logger.info(f"Fetching net position for {country_code}: {start.date()} to {end.date()}")
 
     try:
