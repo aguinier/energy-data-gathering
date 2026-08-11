@@ -47,3 +47,21 @@
 0  7 * * * cd /app && /usr/local/bin/python3 scripts/update_weather_observation.py >> /app/logs/cron_weather_obs.log 2>&1
 30 13 * * * cd /app && /usr/local/bin/python3 scripts/update_weather_observation.py >> /app/logs/cron_weather_obs.log 2>&1
 30 19 * * * cd /app && /usr/local/bin/python3 scripts/update_weather_observation.py >> /app/logs/cron_weather_obs.log 2>&1
+
+# Late-publisher catch-up (ABL-84/ABL-85), weekly.
+# scripts/update.py only ever refetches a trailing 7-day window, so a zone
+# that goes dark for longer than that and later republishes is never
+# re-requested once the outage slides out of that window — even though
+# ENTSO-E is still holding the data. AL and CY both do this (measured
+# 2026-08-09: hundreds to over a thousand points sitting unclaimed upstream);
+# MK/MD go dark over similar spans and genuinely never publish the missing
+# hours, which this job does not need to know in advance — it just gets an
+# empty response back for those and moves on.
+#
+# Weekly, not daily: the recoverable window stays open for weeks after a zone
+# resumes (AL's June gap was still fetchable in August), and a country with no
+# interior holes costs this job one bounded, indexed SELECT against
+# energy_load and zero ENTSO-E requests — there is no standing cost to a
+# healthy zone that would justify running it more often. 05:00 UTC Sunday sits
+# clear of every other scheduled job above.
+0 5 * * 0 cd /app && /usr/local/bin/python3 scripts/catchup.py >> /app/logs/cron_catchup.log 2>&1
