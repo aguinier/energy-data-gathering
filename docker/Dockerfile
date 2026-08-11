@@ -20,7 +20,8 @@ COPY scripts/ scripts/
 COPY tests/ tests/
 
 # Install crontab. Full updates at 00:30, 06:30, 13:30, 18:30 UTC, plus a
-# price-only day-ahead pass at 11:15 and 12:15 UTC — see docker/crontab.
+# price-only day-ahead pass at 11:15 and 12:15 UTC, plus a weekly late-
+# publisher catch-up (ABL-85) at 05:00 UTC Sunday — see docker/crontab.
 COPY docker/crontab /etc/cron.d/energy-data
 RUN chmod 0644 /etc/cron.d/energy-data && crontab /etc/cron.d/energy-data
 
