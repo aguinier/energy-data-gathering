@@ -1,0 +1,2366 @@
+{
+  "issue": "ABL-442",
+  "generated_at_utc": "2026-08-14T02:38:01+00:00",
+  "horizon_days": 28.0,
+  "database": {
+    "path": "C:\\Code\\able\\data\\energy_dashboard.db",
+    "size_gib": 8.78,
+    "newest_energy_generation_target": "2026-08-13 13:30:00"
+  },
+  "exposure": {
+    "horizon_days": 28.0,
+    "tables": {
+      "energy_generation": {
+        "clock_column": "fetched_at",
+        "total_rows": 3180752,
+        "bands": [
+          {
+            "band": "1 <7d",
+            "rows": 51187,
+            "target_min": "2026-07-22 14:30:00",
+            "target_max": "2026-08-13 13:30:00"
+          },
+          {
+            "band": "2 7-14d",
+            "rows": 15856,
+            "target_min": "2026-07-15 14:30:00",
+            "target_max": "2026-07-29 19:30:00"
+          },
+          {
+            "band": "3 14-21d",
+            "rows": 15776,
+            "target_min": "2026-07-08 14:30:00",
+            "target_max": "2026-07-15 19:00:00"
+          },
+          {
+            "band": "4 21-28d",
+            "rows": 15763,
+            "target_min": "2026-07-01 14:30:00",
+            "target_max": "2026-07-08 19:00:00"
+          },
+          {
+            "band": "5 28-35d",
+            "rows": 16220,
+            "target_min": "2026-06-24 14:30:00",
+            "target_max": "2026-07-01 19:00:00"
+          },
+          {
+            "band": "6 35-90d",
+            "rows": 127356,
+            "target_min": "2026-04-30 14:30:00",
+            "target_max": "2026-06-24 19:00:00"
+          },
+          {
+            "band": "7 >90d",
+            "rows": 2938594,
+            "target_min": "2021-01-01 00:00:00",
+            "target_max": "2026-04-30 19:00:00"
+          }
+        ],
+        "unrevised_rows": 98582,
+        "unrevised_pct": 3.0993,
+        "unrevised_target_min": "2026-07-01 14:30:00",
+        "unrevised_target_max": "2026-08-13 13:30:00"
+      },
+      "energy_renewable": {
+        "clock_column": "fetched_at",
+        "total_rows": 832050,
+        "bands": [
+          {
+            "band": "1 <7d",
+            "rows": 548339,
+            "target_min": "2025-11-13T09:30:00",
+            "target_max": "2026-08-13 13:30:00"
+          },
+          {
+            "band": "2 7-14d",
+            "rows": 25061,
+            "target_min": "2025-11-06T09:30:00",
+            "target_max": "2026-07-29 19:30:00"
+          },
+          {
+            "band": "3 14-21d",
+            "rows": 18829,
+            "target_min": "2025-10-30T09:30:00",
+            "target_max": "2025-12-10 14:15:00"
+          },
+          {
+            "band": "4 21-28d",
+            "rows": 17497,
+            "target_min": "2025-10-23T09:30:00",
+            "target_max": "2025-12-03 16:30:00"
+          },
+          {
+            "band": "5 28-35d",
+            "rows": 15041,
+            "target_min": "2025-10-16T09:30:00",
+            "target_max": "2025-11-26 16:30:00"
+          },
+          {
+            "band": "6 35-90d",
+            "rows": 17936,
+            "target_min": "2025-09-08T22:00:00",
+            "target_max": "2025-11-19 16:30:00"
+          },
+          {
+            "band": "7 >90d",
+            "rows": 189347,
+            "target_min": "2021-01-01 00:00:00",
+            "target_max": "2025-09-27 14:00:00"
+          }
+        ],
+        "unrevised_rows": 609726,
+        "unrevised_pct": 73.28,
+        "unrevised_target_min": "2025-10-23T09:30:00",
+        "unrevised_target_max": "2026-08-13 13:30:00"
+      },
+      "energy_load": {
+        "clock_column": "created_at",
+        "total_rows": 2645970,
+        "bands": [
+          {
+            "band": "1 <7d",
+            "rows": 570307,
+            "target_min": "2025-11-13T10:00:00",
+            "target_max": "2026-08-13 13:30:00"
+          },
+          {
+            "band": "2 7-14d",
+            "rows": 14437,
+            "target_min": "2025-11-06T10:00:00",
+            "target_max": "2026-07-29 19:30:00"
+          },
+          {
+            "band": "3 14-21d",
+            "rows": 12936,
+            "target_min": "2025-10-30T10:00:00",
+            "target_max": "2025-12-09 10:30:00"
+          },
+          {
+            "band": "4 21-28d",
+            "rows": 12935,
+            "target_min": "2025-10-23T10:00:00",
+            "target_max": "2025-12-02 10:30:00"
+          },
+          {
+            "band": "5 28-35d",
+            "rows": 12936,
+            "target_min": "2025-10-16T10:00:00",
+            "target_max": "2025-11-25 10:30:00"
+          },
+          {
+            "band": "6 35-90d",
+            "rows": 101347,
+            "target_min": "2025-09-05T22:00:00",
+            "target_max": "2025-11-18 10:30:00"
+          },
+          {
+            "band": "7 >90d",
+            "rows": 1921072,
+            "target_min": "2019-01-01 00:00:00",
+            "target_max": "2025-09-24 10:30:00"
+          }
+        ],
+        "unrevised_rows": 610615,
+        "unrevised_pct": 23.0772,
+        "unrevised_target_min": "2025-10-23T10:00:00",
+        "unrevised_target_max": "2026-08-13 13:30:00"
+      },
+      "energy_price": {
+        "clock_column": "created_at",
+        "total_rows": 1553530,
+        "bands": [
+          {
+            "band": "0 future target",
+            "rows": 6752,
+            "target_min": "2025-11-20T09:00:00",
+            "target_max": "2026-08-14 21:45:00"
+          },
+          {
+            "band": "1 <7d",
+            "rows": 611666,
+            "target_min": "2025-11-13T10:00:00",
+            "target_max": "2026-08-13 13:45:00"
+          },
+          {
+            "band": "2 7-14d",
+            "rows": 4960,
+            "target_min": "2025-11-06T10:00:00",
+            "target_max": "2026-08-06 13:45:00"
+          },
+          {
+            "band": "3 14-21d",
+            "rows": 4021,
+            "target_min": "2025-10-30T10:00:00",
+            "target_max": "2025-12-12 14:00:00"
+          },
+          {
+            "band": "4 21-28d",
+            "rows": 4008,
+            "target_min": "2025-10-23T10:00:00",
+            "target_max": "2025-12-05 14:00:00"
+          },
+          {
+            "band": "5 28-35d",
+            "rows": 3876,
+            "target_min": "2025-10-16T10:00:00",
+            "target_max": "2025-11-28 14:00:00"
+          },
+          {
+            "band": "6 35-90d",
+            "rows": 24245,
+            "target_min": "2025-08-22T10:00:00",
+            "target_max": "2025-11-21 14:00:00"
+          },
+          {
+            "band": "7 >90d",
+            "rows": 894002,
+            "target_min": "2021-01-01 00:00:00",
+            "target_max": "2025-09-27 14:00:00"
+          }
+        ],
+        "unrevised_rows": 631407,
+        "unrevised_pct": 40.6434,
+        "unrevised_target_min": "2025-10-23T10:00:00",
+        "unrevised_target_max": "2026-08-14 21:45:00"
+      }
+    }
+  },
+  "exposure_by_country": {
+    "table": "energy_generation",
+    "horizon_days": 28.0,
+    "countries": [
+      {
+        "country_code": "AL",
+        "unrevised_rows": 152,
+        "total_rows": 824,
+        "unrevised_pct": 18.4466,
+        "settled_through": "2026-06-23 21:00:00",
+        "unrevised_from": "2026-08-06 14:00:00"
+      },
+      {
+        "country_code": "AT",
+        "unrevised_rows": 4120,
+        "total_rows": 196850,
+        "unrevised_pct": 2.093,
+        "settled_through": "2026-07-01 14:15:00",
+        "unrevised_from": "2026-07-01 14:30:00"
+      },
+      {
+        "country_code": "BA",
+        "unrevised_rows": 1029,
+        "total_rows": 48720,
+        "unrevised_pct": 2.1121,
+        "settled_through": "2026-07-01 14:00:00",
+        "unrevised_from": "2026-07-01 15:00:00"
+      },
+      {
+        "country_code": "BE",
+        "unrevised_rows": 1030,
+        "total_rows": 49213,
+        "unrevised_pct": 2.0929,
+        "settled_through": "2026-07-01 14:00:00",
+        "unrevised_from": "2026-07-01 15:00:00"
+      },
+      {
+        "country_code": "BG",
+        "unrevised_rows": 1025,
+        "total_rows": 49206,
+        "unrevised_pct": 2.0831,
+        "settled_through": "2026-07-01 14:00:00",
+        "unrevised_from": "2026-07-01 15:00:00"
+      },
+      {
+        "country_code": "CH",
+        "unrevised_rows": 1030,
+        "total_rows": 49213,
+        "unrevised_pct": 2.0929,
+        "settled_through": "2026-07-01 14:00:00",
+        "unrevised_from": "2026-07-01 15:00:00"
+      },
+      {
+        "country_code": "CY",
+        "unrevised_rows": 2056,
+        "total_rows": 40659,
+        "unrevised_pct": 5.0567,
+        "settled_through": "2026-07-01 14:30:00",
+        "unrevised_from": "2026-07-01 15:00:00"
+      },
+      {
+        "country_code": "CZ",
+        "unrevised_rows": 4120,
+        "total_rows": 104980,
+        "unrevised_pct": 3.9246,
+        "settled_through": "2026-07-01 14:45:00",
+        "unrevised_from": "2026-07-01 15:00:00"
+      },
+      {
+        "country_code": "DE",
+        "unrevised_rows": 4119,
+        "total_rows": 196853,
+        "unrevised_pct": 2.0924,
+        "settled_through": "2026-07-01 15:15:00",
+        "unrevised_from": "2026-07-01 15:30:00"
+      },
+      {
+        "country_code": "DK",
+        "unrevised_rows": 4117,
+        "total_rows": 84572,
+        "unrevised_pct": 4.868,
+        "settled_through": "2026-07-01 15:30:00",
+        "unrevised_from": "2026-07-01 15:45:00"
+      },
+      {
+        "country_code": "EE",
+        "unrevised_rows": 4117,
+        "total_rows": 67903,
+        "unrevised_pct": 6.0631,
+        "settled_through": "2026-07-01 15:30:00",
+        "unrevised_from": "2026-07-01 15:45:00"
+      },
+      {
+        "country_code": "ES",
+        "unrevised_rows": 4117,
+        "total_rows": 160198,
+        "unrevised_pct": 2.5699,
+        "settled_through": "2026-07-01 15:45:00",
+        "unrevised_from": "2026-07-01 16:00:00"
+      },
+      {
+        "country_code": "FI",
+        "unrevised_rows": 4103,
+        "total_rows": 134200,
+        "unrevised_pct": 3.0574,
+        "settled_through": "2026-07-01 16:00:00",
+        "unrevised_from": "2026-07-01 16:15:00"
+      },
+      {
+        "country_code": "FR",
+        "unrevised_rows": 2107,
+        "total_rows": 90397,
+        "unrevised_pct": 2.3308,
+        "settled_through": "2026-06-30 23:45:00",
+        "unrevised_from": "2026-07-22 14:15:00"
+      },
+      {
+        "country_code": "GR",
+        "unrevised_rows": 4115,
+        "total_rows": 56454,
+        "unrevised_pct": 7.2891,
+        "settled_through": "2026-07-01 16:15:00",
+        "unrevised_from": "2026-07-01 16:30:00"
+      },
+      {
+        "country_code": "HR",
+        "unrevised_rows": 4115,
+        "total_rows": 120318,
+        "unrevised_pct": 3.4201,
+        "settled_through": "2026-07-01 16:30:00",
+        "unrevised_from": "2026-07-01 16:45:00"
+      },
+      {
+        "country_code": "HU",
+        "unrevised_rows": 4113,
+        "total_rows": 196853,
+        "unrevised_pct": 2.0894,
+        "settled_through": "2026-07-01 16:45:00",
+        "unrevised_from": "2026-07-01 17:00:00"
+      },
+      {
+        "country_code": "IE",
+        "unrevised_rows": 1988,
+        "total_rows": 95848,
+        "unrevised_pct": 2.0741,
+        "settled_through": "2026-07-01 16:30:00",
+        "unrevised_from": "2026-07-01 17:00:00"
+      },
+      {
+        "country_code": "IT",
+        "unrevised_rows": 4112,
+        "total_rows": 91733,
+        "unrevised_pct": 4.4826,
+        "settled_through": "2026-07-01 17:00:00",
+        "unrevised_from": "2026-07-01 17:15:00"
+      },
+      {
+        "country_code": "LT",
+        "unrevised_rows": 4112,
+        "total_rows": 94893,
+        "unrevised_pct": 4.3333,
+        "settled_through": "2026-07-01 17:00:00",
+        "unrevised_from": "2026-07-01 17:15:00"
+      },
+      {
+        "country_code": "LU",
+        "unrevised_rows": 4113,
+        "total_rows": 196854,
+        "unrevised_pct": 2.0894,
+        "settled_through": "2026-07-01 17:15:00",
+        "unrevised_from": "2026-07-01 17:30:00"
+      },
+      {
+        "country_code": "LV",
+        "unrevised_rows": 1024,
+        "total_rows": 49206,
+        "unrevised_pct": 2.081,
+        "settled_through": "2026-07-01 17:00:00",
+        "unrevised_from": "2026-07-01 18:00:00"
+      },
+      {
+        "country_code": "MD",
+        "unrevised_rows": 1014,
+        "total_rows": 47365,
+        "unrevised_pct": 2.1408,
+        "settled_through": "2026-05-20 19:00:00",
+        "unrevised_from": "2026-07-02 07:00:00"
+      },
+      {
+        "country_code": "ME",
+        "unrevised_rows": 1027,
+        "total_rows": 49213,
+        "unrevised_pct": 2.0868,
+        "settled_through": "2026-07-01 17:00:00",
+        "unrevised_from": "2026-07-01 18:00:00"
+      },
+      {
+        "country_code": "MK",
+        "unrevised_rows": 820,
+        "total_rows": 48070,
+        "unrevised_pct": 1.7058,
+        "settled_through": "2026-07-01 17:00:00",
+        "unrevised_from": "2026-07-01 18:00:00"
+      },
+      {
+        "country_code": "NL",
+        "unrevised_rows": 4108,
+        "total_rows": 196852,
+        "unrevised_pct": 2.0868,
+        "settled_through": "2026-07-01 17:45:00",
+        "unrevised_from": "2026-07-01 18:00:00"
+      },
+      {
+        "country_code": "NO",
+        "unrevised_rows": 4107,
+        "total_rows": 84529,
+        "unrevised_pct": 4.8587,
+        "settled_through": "2026-07-01 17:45:00",
+        "unrevised_from": "2026-07-01 18:00:00"
+      },
+      {
+        "country_code": "PL",
+        "unrevised_rows": 4108,
+        "total_rows": 106205,
+        "unrevised_pct": 3.868,
+        "settled_through": "2026-07-01 18:00:00",
+        "unrevised_from": "2026-07-01 18:15:00"
+      },
+      {
+        "country_code": "PT",
+        "unrevised_rows": 1026,
+        "total_rows": 49213,
+        "unrevised_pct": 2.0848,
+        "settled_through": "2026-07-01 18:00:00",
+        "unrevised_from": "2026-07-01 19:00:00"
+      },
+      {
+        "country_code": "RO",
+        "unrevised_rows": 4106,
+        "total_rows": 194386,
+        "unrevised_pct": 2.1123,
+        "settled_through": "2026-07-01 18:15:00",
+        "unrevised_from": "2026-07-01 18:30:00"
+      },
+      {
+        "country_code": "RS",
+        "unrevised_rows": 1026,
+        "total_rows": 49213,
+        "unrevised_pct": 2.0848,
+        "settled_through": "2026-07-01 18:00:00",
+        "unrevised_from": "2026-07-01 19:00:00"
+      },
+      {
+        "country_code": "SE",
+        "unrevised_rows": 4105,
+        "total_rows": 67542,
+        "unrevised_pct": 6.0777,
+        "settled_through": "2026-07-01 18:30:00",
+        "unrevised_from": "2026-07-01 18:45:00"
+      },
+      {
+        "country_code": "SI",
+        "unrevised_rows": 4106,
+        "total_rows": 55360,
+        "unrevised_pct": 7.4169,
+        "settled_through": "2026-07-01 18:45:00",
+        "unrevised_from": "2026-07-01 19:00:00"
+      },
+      {
+        "country_code": "SK",
+        "unrevised_rows": 4095,
+        "total_rows": 56857,
+        "unrevised_pct": 7.2023,
+        "settled_through": "2026-07-01 19:00:00",
+        "unrevised_from": "2026-07-01 19:15:00"
+      }
+    ]
+  },
+  "sweep": {
+    "horizon_days": 28.0,
+    "target_start": "2026-01-01",
+    "target_end": "9999-12-31",
+    "pairs_tested": 134,
+    "pairs_affected": 17,
+    "findings": [
+      {
+        "country_code": "AT",
+        "column": "solar_mw",
+        "n_unrevised": 4120,
+        "n_revised": 17322,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 0.9817,
+        "vintage_effect": 0.9817,
+        "mean_mw_revised": 808.185,
+        "affected": false
+      },
+      {
+        "country_code": "BE",
+        "column": "solar_mw",
+        "n_unrevised": 1030,
+        "n_revised": 4331,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 1420.972,
+        "affected": false
+      },
+      {
+        "country_code": "BG",
+        "column": "solar_mw",
+        "n_unrevised": 1025,
+        "n_revised": 4326,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0018,
+        "vintage_effect": 1.0018,
+        "mean_mw_revised": 801.663,
+        "affected": false
+      },
+      {
+        "country_code": "CH",
+        "column": "solar_mw",
+        "n_unrevised": 1030,
+        "n_revised": 4331,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0365,
+        "vintage_effect": 1.0365,
+        "mean_mw_revised": 750.366,
+        "affected": false
+      },
+      {
+        "country_code": "CY",
+        "column": "solar_mw",
+        "n_unrevised": 2056,
+        "n_revised": 5889,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 0.2544,
+        "vintage_effect": 0.2544,
+        "mean_mw_revised": 31.589,
+        "affected": true
+      },
+      {
+        "country_code": "CZ",
+        "column": "solar_mw",
+        "n_unrevised": 4120,
+        "n_revised": 17324,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.006,
+        "vintage_effect": 1.006,
+        "mean_mw_revised": 631.891,
+        "affected": false
+      },
+      {
+        "country_code": "DE",
+        "column": "solar_mw",
+        "n_unrevised": 4119,
+        "n_revised": 17328,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0051,
+        "vintage_effect": 1.0051,
+        "mean_mw_revised": 10095.446,
+        "affected": false
+      },
+      {
+        "country_code": "DK",
+        "column": "solar_mw",
+        "n_unrevised": 3764,
+        "n_revised": 14531,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0224,
+        "vintage_effect": 1.0224,
+        "mean_mw_revised": 770.055,
+        "affected": false
+      },
+      {
+        "country_code": "EE",
+        "column": "solar_mw",
+        "n_unrevised": 4117,
+        "n_revised": 17283,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.1891,
+        "vintage_effect": 1.1891,
+        "mean_mw_revised": 161.194,
+        "affected": true
+      },
+      {
+        "country_code": "ES",
+        "column": "solar_mw",
+        "n_unrevised": 4117,
+        "n_revised": 17321,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0004,
+        "vintage_effect": 1.0004,
+        "mean_mw_revised": 6738.775,
+        "affected": false
+      },
+      {
+        "country_code": "FI",
+        "column": "solar_mw",
+        "n_unrevised": 3871,
+        "n_revised": 17317,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 206.069,
+        "affected": false
+      },
+      {
+        "country_code": "FR",
+        "column": "solar_mw",
+        "n_unrevised": 2107,
+        "n_revised": 17161,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 4044.899,
+        "affected": false
+      },
+      {
+        "country_code": "GR",
+        "column": "solar_mw",
+        "n_unrevised": 4115,
+        "n_revised": 8459,
+        "ratio_unrevised": 0.9347,
+        "ratio_revised": 0.7903,
+        "vintage_effect": 0.8455,
+        "mean_mw_revised": 1632.714,
+        "affected": true
+      },
+      {
+        "country_code": "HR",
+        "column": "solar_mw",
+        "n_unrevised": 4115,
+        "n_revised": 17334,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 0.9967,
+        "vintage_effect": 0.9967,
+        "mean_mw_revised": 90.371,
+        "affected": false
+      },
+      {
+        "country_code": "HU",
+        "column": "solar_mw",
+        "n_unrevised": 4113,
+        "n_revised": 17334,
+        "ratio_unrevised": 1.0002,
+        "ratio_revised": 1.003,
+        "vintage_effect": 1.0029,
+        "mean_mw_revised": 874.571,
+        "affected": false
+      },
+      {
+        "country_code": "IT",
+        "column": "solar_mw",
+        "n_unrevised": 4112,
+        "n_revised": 17332,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 0.9978,
+        "vintage_effect": 0.9978,
+        "mean_mw_revised": 4261.883,
+        "affected": false
+      },
+      {
+        "country_code": "LT",
+        "column": "solar_mw",
+        "n_unrevised": 4112,
+        "n_revised": 17332,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0001,
+        "vintage_effect": 1.0001,
+        "mean_mw_revised": 271.002,
+        "affected": false
+      },
+      {
+        "country_code": "LU",
+        "column": "solar_mw",
+        "n_unrevised": 4113,
+        "n_revised": 17334,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 0.9999,
+        "vintage_effect": 0.9999,
+        "mean_mw_revised": 60.153,
+        "affected": false
+      },
+      {
+        "country_code": "LV",
+        "column": "solar_mw",
+        "n_unrevised": 1024,
+        "n_revised": 4332,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.1852,
+        "vintage_effect": 1.1852,
+        "mean_mw_revised": 210.964,
+        "affected": true
+      },
+      {
+        "country_code": "MD",
+        "column": "solar_mw",
+        "n_unrevised": 978,
+        "n_revised": 3297,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 29.245,
+        "affected": false
+      },
+      {
+        "country_code": "NL",
+        "column": "solar_mw",
+        "n_unrevised": 4108,
+        "n_revised": 17332,
+        "ratio_unrevised": 0.9992,
+        "ratio_revised": 1.7633,
+        "vintage_effect": 1.7647,
+        "mean_mw_revised": 61.872,
+        "affected": true
+      },
+      {
+        "country_code": "NO",
+        "column": "solar_mw",
+        "n_unrevised": 4107,
+        "n_revised": 17326,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 0.884,
+        "affected": false
+      },
+      {
+        "country_code": "PL",
+        "column": "solar_mw",
+        "n_unrevised": 4108,
+        "n_revised": 17340,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 2832.218,
+        "affected": false
+      },
+      {
+        "country_code": "PT",
+        "column": "solar_mw",
+        "n_unrevised": 1026,
+        "n_revised": 4335,
+        "ratio_unrevised": 1.0043,
+        "ratio_revised": 1.0118,
+        "vintage_effect": 1.0074,
+        "mean_mw_revised": 720.088,
+        "affected": false
+      },
+      {
+        "country_code": "RO",
+        "column": "solar_mw",
+        "n_unrevised": 4106,
+        "n_revised": 17335,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 467.782,
+        "affected": false
+      },
+      {
+        "country_code": "SE",
+        "column": "solar_mw",
+        "n_unrevised": 4105,
+        "n_revised": 17331,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 362.675,
+        "affected": false
+      },
+      {
+        "country_code": "SI",
+        "column": "solar_mw",
+        "n_unrevised": 4106,
+        "n_revised": 7422,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 0.9915,
+        "vintage_effect": 0.9915,
+        "mean_mw_revised": 254.225,
+        "affected": false
+      },
+      {
+        "country_code": "SK",
+        "column": "solar_mw",
+        "n_unrevised": 4095,
+        "n_revised": 8927,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 91.17,
+        "affected": false
+      },
+      {
+        "country_code": "AT",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 4120,
+        "n_revised": 17322,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0078,
+        "vintage_effect": 1.0078,
+        "mean_mw_revised": 1029.665,
+        "affected": false
+      },
+      {
+        "country_code": "BA",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 1029,
+        "n_revised": 4331,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 17.529,
+        "affected": false
+      },
+      {
+        "country_code": "BE",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 1030,
+        "n_revised": 4331,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 0.8743,
+        "vintage_effect": 0.8743,
+        "mean_mw_revised": 722.844,
+        "affected": true
+      },
+      {
+        "country_code": "BG",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 1025,
+        "n_revised": 4326,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0083,
+        "vintage_effect": 1.0083,
+        "mean_mw_revised": 154.504,
+        "affected": false
+      },
+      {
+        "country_code": "CH",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 1030,
+        "n_revised": 4331,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.5421,
+        "vintage_effect": 1.5421,
+        "mean_mw_revised": 22.65,
+        "affected": true
+      },
+      {
+        "country_code": "CY",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 2056,
+        "n_revised": 5889,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 0.57,
+        "vintage_effect": 0.57,
+        "mean_mw_revised": 18.858,
+        "affected": true
+      },
+      {
+        "country_code": "CZ",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 4120,
+        "n_revised": 17324,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 0.9792,
+        "vintage_effect": 0.9792,
+        "mean_mw_revised": 78.611,
+        "affected": false
+      },
+      {
+        "country_code": "DE",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 4119,
+        "n_revised": 17328,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0067,
+        "vintage_effect": 1.0067,
+        "mean_mw_revised": 12115.919,
+        "affected": false
+      },
+      {
+        "country_code": "DK",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 4117,
+        "n_revised": 17308,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.003,
+        "vintage_effect": 1.003,
+        "mean_mw_revised": 1227.18,
+        "affected": false
+      },
+      {
+        "country_code": "EE",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 4053,
+        "n_revised": 17254,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0026,
+        "vintage_effect": 1.0026,
+        "mean_mw_revised": 146.185,
+        "affected": false
+      },
+      {
+        "country_code": "ES",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 4117,
+        "n_revised": 17321,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0006,
+        "vintage_effect": 1.0006,
+        "mean_mw_revised": 6622.498,
+        "affected": false
+      },
+      {
+        "country_code": "FI",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 4103,
+        "n_revised": 17317,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 2352.08,
+        "affected": false
+      },
+      {
+        "country_code": "FR",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 2107,
+        "n_revised": 17161,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 0.9998,
+        "vintage_effect": 0.9998,
+        "mean_mw_revised": 5185.668,
+        "affected": false
+      },
+      {
+        "country_code": "GR",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 4115,
+        "n_revised": 8459,
+        "ratio_unrevised": 1.0136,
+        "ratio_revised": 1.0493,
+        "vintage_effect": 1.0352,
+        "mean_mw_revised": 1346.439,
+        "affected": false
+      },
+      {
+        "country_code": "HR",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 4114,
+        "n_revised": 17334,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 0.9994,
+        "vintage_effect": 0.9994,
+        "mean_mw_revised": 338.554,
+        "affected": false
+      },
+      {
+        "country_code": "HU",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 4113,
+        "n_revised": 17334,
+        "ratio_unrevised": 1.0006,
+        "ratio_revised": 1.0067,
+        "vintage_effect": 1.0061,
+        "mean_mw_revised": 65.144,
+        "affected": false
+      },
+      {
+        "country_code": "IE",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 1988,
+        "n_revised": 7078,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 1398.351,
+        "affected": false
+      },
+      {
+        "country_code": "IT",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 4091,
+        "n_revised": 17335,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 0.9988,
+        "vintage_effect": 0.9988,
+        "mean_mw_revised": 2954.839,
+        "affected": false
+      },
+      {
+        "country_code": "LT",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 4112,
+        "n_revised": 17332,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0001,
+        "vintage_effect": 1.0001,
+        "mean_mw_revised": 588.393,
+        "affected": false
+      },
+      {
+        "country_code": "LU",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 4113,
+        "n_revised": 17334,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 54.091,
+        "affected": false
+      },
+      {
+        "country_code": "LV",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 1024,
+        "n_revised": 4332,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0601,
+        "vintage_effect": 1.0601,
+        "mean_mw_revised": 33.063,
+        "affected": false
+      },
+      {
+        "country_code": "MD",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 978,
+        "n_revised": 3297,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 15.457,
+        "affected": false
+      },
+      {
+        "country_code": "ME",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 1027,
+        "n_revised": 4334,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0205,
+        "vintage_effect": 1.0205,
+        "mean_mw_revised": 39.915,
+        "affected": false
+      },
+      {
+        "country_code": "MK",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 820,
+        "n_revised": 4247,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 11.448,
+        "affected": false
+      },
+      {
+        "country_code": "NL",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 4108,
+        "n_revised": 17332,
+        "ratio_unrevised": 0.9949,
+        "ratio_revised": 2.2851,
+        "vintage_effect": 2.2968,
+        "mean_mw_revised": 788.233,
+        "affected": true
+      },
+      {
+        "country_code": "NO",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 4107,
+        "n_revised": 17326,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 1732.008,
+        "affected": false
+      },
+      {
+        "country_code": "PL",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 4108,
+        "n_revised": 17340,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 2205.102,
+        "affected": false
+      },
+      {
+        "country_code": "PT",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 1026,
+        "n_revised": 4335,
+        "ratio_unrevised": 0.9991,
+        "ratio_revised": 0.9845,
+        "vintage_effect": 0.9853,
+        "mean_mw_revised": 1642.222,
+        "affected": false
+      },
+      {
+        "country_code": "RO",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 4106,
+        "n_revised": 17335,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 717.725,
+        "affected": false
+      },
+      {
+        "country_code": "RS",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 1026,
+        "n_revised": 4335,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 205.348,
+        "affected": false
+      },
+      {
+        "country_code": "SE",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 4105,
+        "n_revised": 17339,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 4589.208,
+        "affected": false
+      },
+      {
+        "country_code": "SI",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 4070,
+        "n_revised": 7422,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 0.9738,
+        "vintage_effect": 0.9738,
+        "mean_mw_revised": 0.635,
+        "affected": false
+      },
+      {
+        "country_code": "SK",
+        "column": "wind_onshore_mw",
+        "n_unrevised": 4095,
+        "n_revised": 8927,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 0.441,
+        "affected": false
+      },
+      {
+        "country_code": "BE",
+        "column": "wind_offshore_mw",
+        "n_unrevised": 1030,
+        "n_revised": 4331,
+        "ratio_unrevised": 0.9908,
+        "ratio_revised": 0.9975,
+        "vintage_effect": 1.0067,
+        "mean_mw_revised": 778.471,
+        "affected": false
+      },
+      {
+        "country_code": "DE",
+        "column": "wind_offshore_mw",
+        "n_unrevised": 4119,
+        "n_revised": 17328,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0061,
+        "vintage_effect": 1.0061,
+        "mean_mw_revised": 3331.309,
+        "affected": false
+      },
+      {
+        "country_code": "DK",
+        "column": "wind_offshore_mw",
+        "n_unrevised": 4081,
+        "n_revised": 17002,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.6041,
+        "vintage_effect": 1.6041,
+        "mean_mw_revised": 1259.906,
+        "affected": true
+      },
+      {
+        "country_code": "FR",
+        "column": "wind_offshore_mw",
+        "n_unrevised": 2107,
+        "n_revised": 17161,
+        "ratio_unrevised": 0.9999,
+        "ratio_revised": 0.9999,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 743.762,
+        "affected": false
+      },
+      {
+        "country_code": "IT",
+        "column": "wind_offshore_mw",
+        "n_unrevised": 4112,
+        "n_revised": 17335,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0001,
+        "vintage_effect": 1.0001,
+        "mean_mw_revised": 6.757,
+        "affected": false
+      },
+      {
+        "country_code": "NL",
+        "column": "wind_offshore_mw",
+        "n_unrevised": 4108,
+        "n_revised": 17332,
+        "ratio_unrevised": 0.9915,
+        "ratio_revised": 0.994,
+        "vintage_effect": 1.0026,
+        "mean_mw_revised": 1839.123,
+        "affected": false
+      },
+      {
+        "country_code": "NO",
+        "column": "wind_offshore_mw",
+        "n_unrevised": 4107,
+        "n_revised": 17326,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 2.304,
+        "affected": false
+      },
+      {
+        "country_code": "PT",
+        "column": "wind_offshore_mw",
+        "n_unrevised": 1026,
+        "n_revised": 4335,
+        "ratio_unrevised": 0.9998,
+        "ratio_revised": 0.9999,
+        "vintage_effect": 1.0001,
+        "mean_mw_revised": 9.918,
+        "affected": false
+      },
+      {
+        "country_code": "AT",
+        "column": "hydro_run_mw",
+        "n_unrevised": 4120,
+        "n_revised": 17322,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.003,
+        "vintage_effect": 1.003,
+        "mean_mw_revised": 2491.045,
+        "affected": false
+      },
+      {
+        "country_code": "BA",
+        "column": "hydro_run_mw",
+        "n_unrevised": 1029,
+        "n_revised": 4331,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 97.12,
+        "affected": false
+      },
+      {
+        "country_code": "BE",
+        "column": "hydro_run_mw",
+        "n_unrevised": 1030,
+        "n_revised": 4331,
+        "ratio_unrevised": 1.1203,
+        "ratio_revised": 2.5576,
+        "vintage_effect": 2.2829,
+        "mean_mw_revised": 24.394,
+        "affected": true
+      },
+      {
+        "country_code": "BG",
+        "column": "hydro_run_mw",
+        "n_unrevised": 1025,
+        "n_revised": 4326,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0019,
+        "vintage_effect": 1.0019,
+        "mean_mw_revised": 251.854,
+        "affected": false
+      },
+      {
+        "country_code": "CH",
+        "column": "hydro_run_mw",
+        "n_unrevised": 1030,
+        "n_revised": 4331,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 0.9999,
+        "vintage_effect": 0.9999,
+        "mean_mw_revised": 1347.789,
+        "affected": false
+      },
+      {
+        "country_code": "CZ",
+        "column": "hydro_run_mw",
+        "n_unrevised": 4120,
+        "n_revised": 17324,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0011,
+        "vintage_effect": 1.0011,
+        "mean_mw_revised": 97.992,
+        "affected": false
+      },
+      {
+        "country_code": "DE",
+        "column": "hydro_run_mw",
+        "n_unrevised": 4119,
+        "n_revised": 17328,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0873,
+        "vintage_effect": 1.0873,
+        "mean_mw_revised": 1414.507,
+        "affected": false
+      },
+      {
+        "country_code": "EE",
+        "column": "hydro_run_mw",
+        "n_unrevised": 4089,
+        "n_revised": 17275,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0022,
+        "vintage_effect": 1.0022,
+        "mean_mw_revised": 0.466,
+        "affected": false
+      },
+      {
+        "country_code": "ES",
+        "column": "hydro_run_mw",
+        "n_unrevised": 4117,
+        "n_revised": 17321,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0004,
+        "vintage_effect": 1.0004,
+        "mean_mw_revised": 1159.308,
+        "affected": false
+      },
+      {
+        "country_code": "FI",
+        "column": "hydro_run_mw",
+        "n_unrevised": 4103,
+        "n_revised": 17317,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 1405.544,
+        "affected": false
+      },
+      {
+        "country_code": "FR",
+        "column": "hydro_run_mw",
+        "n_unrevised": 2107,
+        "n_revised": 17161,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 4855.196,
+        "affected": false
+      },
+      {
+        "country_code": "HR",
+        "column": "hydro_run_mw",
+        "n_unrevised": 4115,
+        "n_revised": 17334,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 0.9914,
+        "vintage_effect": 0.9914,
+        "mean_mw_revised": 143.007,
+        "affected": false
+      },
+      {
+        "country_code": "HU",
+        "column": "hydro_run_mw",
+        "n_unrevised": 4113,
+        "n_revised": 17334,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 12.299,
+        "affected": false
+      },
+      {
+        "country_code": "IE",
+        "column": "hydro_run_mw",
+        "n_unrevised": 1988,
+        "n_revised": 7078,
+        "ratio_unrevised": 0.9989,
+        "ratio_revised": 0.9983,
+        "vintage_effect": 0.9993,
+        "mean_mw_revised": 80.776,
+        "affected": false
+      },
+      {
+        "country_code": "IT",
+        "column": "hydro_run_mw",
+        "n_unrevised": 4112,
+        "n_revised": 17335,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0006,
+        "vintage_effect": 1.0006,
+        "mean_mw_revised": 2645.455,
+        "affected": false
+      },
+      {
+        "country_code": "LT",
+        "column": "hydro_run_mw",
+        "n_unrevised": 4112,
+        "n_revised": 17332,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 35.838,
+        "affected": false
+      },
+      {
+        "country_code": "LU",
+        "column": "hydro_run_mw",
+        "n_unrevised": 4113,
+        "n_revised": 17334,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 0.9998,
+        "vintage_effect": 0.9998,
+        "mean_mw_revised": 6.755,
+        "affected": false
+      },
+      {
+        "country_code": "LV",
+        "column": "hydro_run_mw",
+        "n_unrevised": 1024,
+        "n_revised": 4332,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0191,
+        "vintage_effect": 1.0191,
+        "mean_mw_revised": 370.008,
+        "affected": false
+      },
+      {
+        "country_code": "MD",
+        "column": "hydro_run_mw",
+        "n_unrevised": 978,
+        "n_revised": 3297,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 21.97,
+        "affected": false
+      },
+      {
+        "country_code": "NO",
+        "column": "hydro_run_mw",
+        "n_unrevised": 4107,
+        "n_revised": 17322,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 0.9999,
+        "vintage_effect": 0.9999,
+        "mean_mw_revised": 2981.998,
+        "affected": false
+      },
+      {
+        "country_code": "PL",
+        "column": "hydro_run_mw",
+        "n_unrevised": 4108,
+        "n_revised": 17340,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 98.756,
+        "affected": false
+      },
+      {
+        "country_code": "PT",
+        "column": "hydro_run_mw",
+        "n_unrevised": 1026,
+        "n_revised": 4335,
+        "ratio_unrevised": 0.9966,
+        "ratio_revised": 0.9997,
+        "vintage_effect": 1.0031,
+        "mean_mw_revised": 995.215,
+        "affected": false
+      },
+      {
+        "country_code": "RO",
+        "column": "hydro_run_mw",
+        "n_unrevised": 4106,
+        "n_revised": 17335,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 1146.934,
+        "affected": false
+      },
+      {
+        "country_code": "RS",
+        "column": "hydro_run_mw",
+        "n_unrevised": 1025,
+        "n_revised": 4335,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0189,
+        "vintage_effect": 1.0189,
+        "mean_mw_revised": 1081.253,
+        "affected": false
+      },
+      {
+        "country_code": "SI",
+        "column": "hydro_run_mw",
+        "n_unrevised": 4106,
+        "n_revised": 7422,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0056,
+        "vintage_effect": 1.0056,
+        "mean_mw_revised": 381.107,
+        "affected": false
+      },
+      {
+        "country_code": "SK",
+        "column": "hydro_run_mw",
+        "n_unrevised": 4095,
+        "n_revised": 8927,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 282.34,
+        "affected": false
+      },
+      {
+        "country_code": "AT",
+        "column": "biomass_mw",
+        "n_unrevised": 4120,
+        "n_revised": 17322,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 221.198,
+        "affected": false
+      },
+      {
+        "country_code": "BE",
+        "column": "biomass_mw",
+        "n_unrevised": 1030,
+        "n_revised": 4331,
+        "ratio_unrevised": 1.0186,
+        "ratio_revised": 1.9277,
+        "vintage_effect": 1.8926,
+        "mean_mw_revised": 233.723,
+        "affected": true
+      },
+      {
+        "country_code": "BG",
+        "column": "biomass_mw",
+        "n_unrevised": 1025,
+        "n_revised": 4326,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0061,
+        "vintage_effect": 1.0061,
+        "mean_mw_revised": 13.218,
+        "affected": false
+      },
+      {
+        "country_code": "CZ",
+        "column": "biomass_mw",
+        "n_unrevised": 4120,
+        "n_revised": 17324,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 0.9996,
+        "vintage_effect": 0.9996,
+        "mean_mw_revised": 308.807,
+        "affected": false
+      },
+      {
+        "country_code": "DE",
+        "column": "biomass_mw",
+        "n_unrevised": 4119,
+        "n_revised": 17328,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 0.9861,
+        "vintage_effect": 0.9861,
+        "mean_mw_revised": 4094.331,
+        "affected": false
+      },
+      {
+        "country_code": "DK",
+        "column": "biomass_mw",
+        "n_unrevised": 4117,
+        "n_revised": 17310,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0469,
+        "vintage_effect": 1.0469,
+        "mean_mw_revised": 662.601,
+        "affected": false
+      },
+      {
+        "country_code": "EE",
+        "column": "biomass_mw",
+        "n_unrevised": 4089,
+        "n_revised": 17275,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0021,
+        "vintage_effect": 1.0021,
+        "mean_mw_revised": 56.837,
+        "affected": false
+      },
+      {
+        "country_code": "ES",
+        "column": "biomass_mw",
+        "n_unrevised": 4117,
+        "n_revised": 17321,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0002,
+        "vintage_effect": 1.0002,
+        "mean_mw_revised": 398.634,
+        "affected": false
+      },
+      {
+        "country_code": "FI",
+        "column": "biomass_mw",
+        "n_unrevised": 4103,
+        "n_revised": 17317,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 1121.419,
+        "affected": false
+      },
+      {
+        "country_code": "FR",
+        "column": "biomass_mw",
+        "n_unrevised": 2107,
+        "n_revised": 17161,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 390.361,
+        "affected": false
+      },
+      {
+        "country_code": "HR",
+        "column": "biomass_mw",
+        "n_unrevised": 4115,
+        "n_revised": 17334,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 70.512,
+        "affected": false
+      },
+      {
+        "country_code": "HU",
+        "column": "biomass_mw",
+        "n_unrevised": 4113,
+        "n_revised": 17334,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 158.902,
+        "affected": false
+      },
+      {
+        "country_code": "IT",
+        "column": "biomass_mw",
+        "n_unrevised": 4112,
+        "n_revised": 17335,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 0.9785,
+        "vintage_effect": 0.9785,
+        "mean_mw_revised": 507.073,
+        "affected": false
+      },
+      {
+        "country_code": "LT",
+        "column": "biomass_mw",
+        "n_unrevised": 4112,
+        "n_revised": 17332,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 19.217,
+        "affected": false
+      },
+      {
+        "country_code": "LU",
+        "column": "biomass_mw",
+        "n_unrevised": 4113,
+        "n_revised": 17334,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 0.9959,
+        "vintage_effect": 0.9959,
+        "mean_mw_revised": 19.271,
+        "affected": false
+      },
+      {
+        "country_code": "LV",
+        "column": "biomass_mw",
+        "n_unrevised": 1024,
+        "n_revised": 4332,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.4665,
+        "vintage_effect": 1.4665,
+        "mean_mw_revised": 43.502,
+        "affected": true
+      },
+      {
+        "country_code": "MD",
+        "column": "biomass_mw",
+        "n_unrevised": 978,
+        "n_revised": 3297,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 1.447,
+        "affected": false
+      },
+      {
+        "country_code": "NL",
+        "column": "biomass_mw",
+        "n_unrevised": 4108,
+        "n_revised": 17332,
+        "ratio_unrevised": 0.9865,
+        "ratio_revised": 1.0843,
+        "vintage_effect": 1.0992,
+        "mean_mw_revised": 177.638,
+        "affected": false
+      },
+      {
+        "country_code": "PL",
+        "column": "biomass_mw",
+        "n_unrevised": 4108,
+        "n_revised": 17340,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 295.516,
+        "affected": false
+      },
+      {
+        "country_code": "PT",
+        "column": "biomass_mw",
+        "n_unrevised": 1026,
+        "n_revised": 4335,
+        "ratio_unrevised": 0.9992,
+        "ratio_revised": 0.9902,
+        "vintage_effect": 0.991,
+        "mean_mw_revised": 293.92,
+        "affected": false
+      },
+      {
+        "country_code": "RO",
+        "column": "biomass_mw",
+        "n_unrevised": 4106,
+        "n_revised": 17335,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 51.221,
+        "affected": false
+      },
+      {
+        "country_code": "RS",
+        "column": "biomass_mw",
+        "n_unrevised": 1025,
+        "n_revised": 4335,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.5641,
+        "vintage_effect": 1.5641,
+        "mean_mw_revised": 39.893,
+        "affected": true
+      },
+      {
+        "country_code": "SI",
+        "column": "biomass_mw",
+        "n_unrevised": 4070,
+        "n_revised": 7422,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 0.9715,
+        "vintage_effect": 0.9715,
+        "mean_mw_revised": 20.742,
+        "affected": false
+      },
+      {
+        "country_code": "SK",
+        "column": "biomass_mw",
+        "n_unrevised": 4095,
+        "n_revised": 8927,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 105.667,
+        "affected": false
+      },
+      {
+        "country_code": "AT",
+        "column": "geothermal_mw",
+        "n_unrevised": 4120,
+        "n_revised": 17322,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 0.072,
+        "affected": false
+      },
+      {
+        "country_code": "DE",
+        "column": "geothermal_mw",
+        "n_unrevised": 4119,
+        "n_revised": 17328,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.194,
+        "vintage_effect": 1.194,
+        "mean_mw_revised": 24.899,
+        "affected": true
+      },
+      {
+        "country_code": "HU",
+        "column": "geothermal_mw",
+        "n_unrevised": 4113,
+        "n_revised": 17334,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 0.335,
+        "affected": false
+      },
+      {
+        "country_code": "IT",
+        "column": "geothermal_mw",
+        "n_unrevised": 4112,
+        "n_revised": 13883,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0018,
+        "vintage_effect": 1.0018,
+        "mean_mw_revised": 588.103,
+        "affected": false
+      },
+      {
+        "country_code": "CZ",
+        "column": "other_renewable_mw",
+        "n_unrevised": 4120,
+        "n_revised": 17324,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0006,
+        "vintage_effect": 1.0006,
+        "mean_mw_revised": 267.554,
+        "affected": false
+      },
+      {
+        "country_code": "DE",
+        "column": "other_renewable_mw",
+        "n_unrevised": 4119,
+        "n_revised": 17328,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0399,
+        "vintage_effect": 1.0399,
+        "mean_mw_revised": 78.359,
+        "affected": false
+      },
+      {
+        "country_code": "EE",
+        "column": "other_renewable_mw",
+        "n_unrevised": 4089,
+        "n_revised": 17275,
+        "ratio_unrevised": 0.0002,
+        "ratio_revised": 0.0829,
+        "vintage_effect": 418.139,
+        "mean_mw_revised": 0.279,
+        "affected": true
+      },
+      {
+        "country_code": "ES",
+        "column": "other_renewable_mw",
+        "n_unrevised": 4117,
+        "n_revised": 17321,
+        "ratio_unrevised": 0.9702,
+        "ratio_revised": 0.9729,
+        "vintage_effect": 1.0028,
+        "mean_mw_revised": 65.068,
+        "affected": false
+      },
+      {
+        "country_code": "FI",
+        "column": "other_renewable_mw",
+        "n_unrevised": 4103,
+        "n_revised": 17317,
+        "ratio_unrevised": 0.0085,
+        "ratio_revised": 0.4806,
+        "vintage_effect": 56.4711,
+        "mean_mw_revised": 42.383,
+        "affected": true
+      },
+      {
+        "country_code": "HR",
+        "column": "other_renewable_mw",
+        "n_unrevised": 4115,
+        "n_revised": 17334,
+        "ratio_unrevised": 0.9277,
+        "ratio_revised": 0.9753,
+        "vintage_effect": 1.0513,
+        "mean_mw_revised": 33.358,
+        "affected": false
+      },
+      {
+        "country_code": "HU",
+        "column": "other_renewable_mw",
+        "n_unrevised": 4113,
+        "n_revised": 17334,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 15.344,
+        "affected": false
+      },
+      {
+        "country_code": "NO",
+        "column": "other_renewable_mw",
+        "n_unrevised": 4107,
+        "n_revised": 17326,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 55.327,
+        "affected": false
+      },
+      {
+        "country_code": "PL",
+        "column": "other_renewable_mw",
+        "n_unrevised": 4108,
+        "n_revised": 17340,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 63.827,
+        "affected": false
+      },
+      {
+        "country_code": "SI",
+        "column": "other_renewable_mw",
+        "n_unrevised": 4070,
+        "n_revised": 4116,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 0.9865,
+        "vintage_effect": 0.9865,
+        "mean_mw_revised": 11.523,
+        "affected": false
+      },
+      {
+        "country_code": "SK",
+        "column": "other_renewable_mw",
+        "n_unrevised": 4095,
+        "n_revised": 8927,
+        "ratio_unrevised": 1.0,
+        "ratio_revised": 1.0,
+        "vintage_effect": 1.0,
+        "mean_mw_revised": 52.288,
+        "affected": false
+      }
+    ]
+  },
+  "confirm": {
+    "results": [
+      {
+        "country_code": "CY",
+        "column": "solar_mw",
+        "vintage_effect": 0.2544,
+        "gen_over_tso_unrevised": 0.888,
+        "gen_over_tso_revised": 0.1682,
+        "confirm_effect": 0.1894,
+        "verdict": "CONFIRMED"
+      },
+      {
+        "country_code": "EE",
+        "column": "solar_mw",
+        "vintage_effect": 1.1891,
+        "gen_over_tso_unrevised": 1.0613,
+        "gen_over_tso_revised": 1.33,
+        "confirm_effect": 1.2532,
+        "verdict": "CONFIRMED"
+      },
+      {
+        "country_code": "GR",
+        "column": "solar_mw",
+        "vintage_effect": 0.8455,
+        "gen_over_tso_unrevised": 0.92,
+        "gen_over_tso_revised": 0.7353,
+        "confirm_effect": 0.7992,
+        "verdict": "CONFIRMED"
+      },
+      {
+        "country_code": "LV",
+        "column": "solar_mw",
+        "vintage_effect": 1.1852,
+        "gen_over_tso_unrevised": 0.9659,
+        "gen_over_tso_revised": 1.1296,
+        "confirm_effect": 1.1695,
+        "verdict": "CONFIRMED"
+      },
+      {
+        "country_code": "NL",
+        "column": "solar_mw",
+        "vintage_effect": 1.7647,
+        "gen_over_tso_unrevised": 0.0438,
+        "gen_over_tso_revised": 0.0648,
+        "confirm_effect": 1.4797,
+        "verdict": "CONFIRMED"
+      },
+      {
+        "country_code": "BE",
+        "column": "wind_onshore_mw",
+        "vintage_effect": 0.8743,
+        "gen_over_tso_unrevised": 1.0636,
+        "gen_over_tso_revised": 0.9564,
+        "confirm_effect": 0.8993,
+        "verdict": "CONFIRMED"
+      },
+      {
+        "country_code": "CH",
+        "column": "wind_onshore_mw",
+        "vintage_effect": 1.5421,
+        "gen_over_tso_unrevised": 1.1331,
+        "gen_over_tso_revised": 1.8313,
+        "confirm_effect": 1.6163,
+        "verdict": "CONFIRMED"
+      },
+      {
+        "country_code": "CY",
+        "column": "wind_onshore_mw",
+        "vintage_effect": 0.57,
+        "gen_over_tso_unrevised": 1.0812,
+        "gen_over_tso_revised": 0.5334,
+        "confirm_effect": 0.4933,
+        "verdict": "CONFIRMED"
+      },
+      {
+        "country_code": "NL",
+        "column": "wind_onshore_mw",
+        "vintage_effect": 2.2968,
+        "gen_over_tso_unrevised": 0.3037,
+        "gen_over_tso_revised": 0.6536,
+        "confirm_effect": 2.1518,
+        "verdict": "CONFIRMED"
+      },
+      {
+        "country_code": "DK",
+        "column": "wind_offshore_mw",
+        "vintage_effect": 1.6041,
+        "gen_over_tso_unrevised": 1.0862,
+        "gen_over_tso_revised": 1.2981,
+        "confirm_effect": 1.1951,
+        "verdict": "CONFIRMED"
+      },
+      {
+        "country_code": "BE",
+        "column": "hydro_run_mw",
+        "vintage_effect": 2.2829,
+        "verdict": "SCREENED_ONLY_NO_REFERENCE"
+      },
+      {
+        "country_code": "BE",
+        "column": "biomass_mw",
+        "vintage_effect": 1.8926,
+        "verdict": "SCREENED_ONLY_NO_REFERENCE"
+      },
+      {
+        "country_code": "LV",
+        "column": "biomass_mw",
+        "vintage_effect": 1.4665,
+        "verdict": "SCREENED_ONLY_NO_REFERENCE"
+      },
+      {
+        "country_code": "RS",
+        "column": "biomass_mw",
+        "vintage_effect": 1.5641,
+        "verdict": "SCREENED_ONLY_NO_REFERENCE"
+      },
+      {
+        "country_code": "DE",
+        "column": "geothermal_mw",
+        "vintage_effect": 1.194,
+        "verdict": "SCREENED_ONLY_NO_REFERENCE"
+      },
+      {
+        "country_code": "EE",
+        "column": "other_renewable_mw",
+        "vintage_effect": 418.139,
+        "verdict": "SCREENED_ONLY_NO_REFERENCE"
+      },
+      {
+        "country_code": "FI",
+        "column": "other_renewable_mw",
+        "vintage_effect": 56.4711,
+        "verdict": "SCREENED_ONLY_NO_REFERENCE"
+      }
+    ],
+    "confirmed": 10
+  },
+  "boundary": {
+    "country_code": "NL",
+    "column": "wind_onshore_mw",
+    "profile": [
+      {
+        "age_lo": 0,
+        "age_hi": 2,
+        "n": 188,
+        "gen_over_ren": 0.9976
+      },
+      {
+        "age_lo": 2,
+        "age_hi": 4,
+        "n": 192,
+        "gen_over_ren": 0.9938
+      },
+      {
+        "age_lo": 4,
+        "age_hi": 6,
+        "n": 192,
+        "gen_over_ren": 0.826
+      },
+      {
+        "age_lo": 6,
+        "age_hi": 8,
+        "n": 1616,
+        "gen_over_ren": 0.9926
+      },
+      {
+        "age_lo": 8,
+        "age_hi": 10,
+        "n": 192,
+        "gen_over_ren": 0.9987
+      },
+      {
+        "age_lo": 10,
+        "age_hi": 12,
+        "n": 192,
+        "gen_over_ren": 1.0
+      },
+      {
+        "age_lo": 12,
+        "age_hi": 14,
+        "n": 192,
+        "gen_over_ren": 0.9979
+      },
+      {
+        "age_lo": 14,
+        "age_hi": 16,
+        "n": 192,
+        "gen_over_ren": 1.0
+      },
+      {
+        "age_lo": 16,
+        "age_hi": 18,
+        "n": 192,
+        "gen_over_ren": 0.9992
+      },
+      {
+        "age_lo": 18,
+        "age_hi": 20,
+        "n": 192,
+        "gen_over_ren": 0.9882
+      },
+      {
+        "age_lo": 20,
+        "age_hi": 22,
+        "n": 192,
+        "gen_over_ren": 0.9794
+      },
+      {
+        "age_lo": 22,
+        "age_hi": 24,
+        "n": 192,
+        "gen_over_ren": 1.0
+      },
+      {
+        "age_lo": 24,
+        "age_hi": 26,
+        "n": 192,
+        "gen_over_ren": 0.9999
+      },
+      {
+        "age_lo": 26,
+        "age_hi": 28,
+        "n": 192,
+        "gen_over_ren": 0.9992
+      },
+      {
+        "age_lo": 28,
+        "age_hi": 30,
+        "n": 192,
+        "gen_over_ren": 4.8264
+      },
+      {
+        "age_lo": 30,
+        "age_hi": 32,
+        "n": 192,
+        "gen_over_ren": 3.0858
+      },
+      {
+        "age_lo": 32,
+        "age_hi": 34,
+        "n": 192,
+        "gen_over_ren": 2.8479
+      },
+      {
+        "age_lo": 34,
+        "age_hi": 36,
+        "n": 192,
+        "gen_over_ren": 3.3715
+      },
+      {
+        "age_lo": 36,
+        "age_hi": 38,
+        "n": 192,
+        "gen_over_ren": 2.3178
+      },
+      {
+        "age_lo": 38,
+        "age_hi": 40,
+        "n": 192,
+        "gen_over_ren": 2.9222
+      },
+      {
+        "age_lo": 40,
+        "age_hi": 42,
+        "n": 192,
+        "gen_over_ren": 3.4241
+      },
+      {
+        "age_lo": 42,
+        "age_hi": 44,
+        "n": 192,
+        "gen_over_ren": 2.9405
+      },
+      {
+        "age_lo": 44,
+        "age_hi": 46,
+        "n": 192,
+        "gen_over_ren": 1.9039
+      }
+    ],
+    "detector_half_window_days": 7.0,
+    "largest_jump": 3.1475,
+    "boundary_found": true,
+    "horizon_days": 28.0,
+    "ratio_younger": 0.9997,
+    "ratio_older": 3.1466
+  },
+  "spot_check": {
+    "horizon_days": 28.0,
+    "window_days": 20,
+    "energy_load": {
+      "session": {
+        "session_day": "2025-12-23",
+        "rows": 1616198,
+        "target_min": "2021-01-01 00:00:00",
+        "target_max": "2025-12-20 22:30:00",
+        "boundary_date": "2025-11-25"
+      },
+      "rows_excluded_variant_timestamp_form": 0,
+      "bands": {
+        "unrevised": {
+          "n": 21072,
+          "ratio": 0.9923354337310599
+        },
+        "revised": {
+          "n": 21120,
+          "ratio": 1.015208346249281
+        }
+      },
+      "vintage_effect": 1.023,
+      "placebos": [
+        {
+          "split": "2025-10-26",
+          "effect": 1.0003,
+          "n_older": 21120,
+          "n_newer": 21120
+        },
+        {
+          "split": "2025-10-06",
+          "effect": 0.995,
+          "n_older": 21120,
+          "n_newer": 21120
+        },
+        {
+          "split": "2025-09-16",
+          "effect": 0.9945,
+          "n_older": 21120,
+          "n_newer": 21120
+        },
+        {
+          "split": "2025-08-27",
+          "effect": 1.0012,
+          "n_older": 21120,
+          "n_newer": 21120
+        },
+        {
+          "split": "2025-08-07",
+          "effect": 0.9937,
+          "n_older": 21120,
+          "n_newer": 21120
+        }
+      ],
+      "placebo_max_abs_effect": 0.0063,
+      "real_abs_effect": 0.023,
+      "verdict": "AGE-DEPENDENT -- 4x the largest placebo movement"
+    },
+    "energy_price": {
+      "session": {
+        "session_day": "2025-11-25",
+        "rows": 686409,
+        "target_min": "2021-12-31T23:00:00",
+        "target_max": "2025-11-25T22:00:00",
+        "boundary_date": "2025-10-28"
+      },
+      "bands": {
+        "UNREVISED (age<H)": {
+          "n": 8570,
+          "mean_eur_mwh": 87.456,
+          "sd": 50.117,
+          "stderr": 0.5414
+        },
+        "revised (age>=H)": {
+          "n": 8640,
+          "mean_eur_mwh": 93.577,
+          "sd": 65.114,
+          "stderr": 0.7005
+        }
+      },
+      "min_detectable_effect": 0.02025
+    },
+    "energy_renewable": {
+      "unrevised_rows": 492972,
+      "total_rows": 492972,
+      "unrevised_pct": 100.0
+    }
+  }
+}
