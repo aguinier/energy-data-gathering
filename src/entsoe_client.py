@@ -1428,6 +1428,25 @@ class ENTSOEClient:
             if df is None or df.empty:
                 raise ENTSOENoDataError("No generation data returned")
 
+            # entsoe-py forward-fills the positions a TimeSeries carried no
+            # Point for. Where that fill produced an exact 0.0 the value is
+            # ours, not the TSO's -- measured 2026-08-14, ES's document for
+            # 2026-08-12 declares 96 quarter-hourly Fossil Hard coal positions
+            # and carries 26, so we stored 58 quarter-hours of a coal fleet
+            # that peaked at 208 MW that day as a measured 0.0. Refuse the
+            # positions nobody published and keep the ones they did, whatever
+            # their value.
+            #
+            # Applied here, before either flatten, so both output frames are
+            # derived from one guarded document rather than from two
+            # separately-guarded copies. It changes energy_generation only:
+            # _map_renewable_columns fillna(0)s what it maps, so a blanked cell
+            # reaches the frozen energy_renewable as the same 0.0 it held
+            # before -- deliberate, see published_points.py's header. ABL-268.
+            df, _ = published_points.blank_unpublished_zeros_by_series(
+                df, raw_xml, label=f"{country_code} generation"
+            )
+
             # Two independent flattens of the SAME MultiIndex frame -- see
             # docstring for why neither can be derived from the other.
             if isinstance(df.columns, pd.MultiIndex):

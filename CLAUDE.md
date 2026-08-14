@@ -797,6 +797,106 @@ Note this corrects a premise recorded on ABL-55 from stored rows alone: PL's
 shows a large share of them are our own forward-fill. That is why the rule was
 measured against the documents rather than the table.
 
+#### Third occurrence: generation (ABL-268)
+
+The A75 actual-generation path ran the same mechanism, unguarded, on every
+country every day. `query_generation_and_renewable_with_metadata` now applies
+`published_points.blank_unpublished_zeros_by_series` to the MultiIndex frame
+**before either flatten**, so one guarded document feeds both output frames.
+Tests: `tests/test_generation_published_points.py`.
+
+Two things are different here from the load and net-position cases, and both
+are load-bearing.
+
+**The unit is a cell, not a row.** `energy_load` and `net_position` have one
+value column each, so refusing the value means refusing the row. An A75 row
+carries up to 21 independently measured production types, and on 2026-08-12
+Belgium's genuine 3.3 GW of gas sat on the same 24 rows as its manufactured
+nuclear zero. Dropping the row would delete twenty real readings to suppress
+one invented one. A blanked cell becomes `NaN`, which `_map_generation_columns`
+already carries through to SQL `NULL` — "write no row" and "write no value" are
+the same rule at the granularity the table actually has.
+
+**The published set is per sub-series, not per document.**
+`published_timestamps` unions every Point in the document, which is right for
+a single-quantity document and wrong for A75: BE's Biomass publishes all 24
+positions, so a document-wide union reports every position as published and
+Nuclear's 23 invented zeros survive untouched.
+`published_timestamps_by_series` keys on `(production type, 'Actual
+Aggregated' | 'Actual Consumption')` — entsoe-py's own column identity, read
+from the same two elements its parser reads — and unions across every
+TimeSeries sharing a key, matching the concat-and-deduplicate entsoe-py
+performs on same-named series.
+`test_document_wide_union_would_have_missed_this` pins the distinction.
+
+Measured against the live API on 2026-08-14 for the market day 2026-08-12, all
+`curveType=A03`:
+
+| zone / type | declared | Points | stored before | stored after |
+|---|---:|---:|---:|---:|
+| ES Fossil Hard coal | 96 (`PT15M`) | 26 | 59 × `0.0` | **1 × `0.0`** |
+| BE Nuclear | 24 (`PT60M`) | **1** (`quantity=0`) | 24 × `0.0` | **1** |
+| BE Hydro Run-of-river | 24 (`PT60M`) | **1** (`quantity=0`) | 24 × `0.0` | **1** |
+| AT Fossil Hard coal | 96 (`PT15M`) | **1** (`quantity=0`) | 96 × `0.0` | **1** |
+| AT Waste | 96 (`PT15M`) | **1** (`quantity=100`) | 96 × `100.0` | 96 (untouched) |
+| DE Solar | 96 (`PT15M`) | 91 | 96 | 92 |
+| SI (whole document) | — | — | 96 rows | 96 rows, 0 blanked |
+
+**Spain's coal is the one that was a wrong number on a chart.** ES burns hard
+coal — 126,379 of its 160,198 stored readings are positive and it reached
+208 MW that very day — and 58 quarter-hours of a running fleet were stored as
+a measured `0.0` that Red Eléctrica never published.
+
+**Belgium's nuclear is the one to reason from.** 23 of those 24 rows are ours,
+but BE's reactors really did shut down on 2026-04-04 (2,078 MW through January,
+exactly `0.0` at every hour since), so the underlying reality is very likely
+zero. They are refused anyway. The rule is about provenance, not plausibility:
+the document cannot tell us which case we are in, and a pipeline that decides
+which zeros to believe by how plausible they look is the one that wrote GR a
+year of measured-looking `0.0` MW net position.
+
+**AT's Waste is the generation-side twin of PT's flat interconnector** — one
+Point at 100 MW held across 96 positions, forward-filled and not zero, so
+untouched. Same reason "store only genuinely published Points" is refuted here
+too.
+
+**Forward-looking impact, measured through the real fetch path against live
+documents for 2026-08-12 across 15 zones: 2,357 values blanked, and not one
+non-zero value changed, disappeared or appeared.** The only transition anywhere
+is `0.0` → `NULL`. Per zone: AT 343, ES 799, SK 239, FI 168, GR 164, CZ 150,
+HU 137, NL 95, IE 88, BE 75, PL 69, FR 26, DE 4, **SI 0, DK 0** — the guard is
+not indiscriminate. Expect `marine_mw`, `fossil_oil_shale_mw` and
+`fossil_coal_derived_gas_mw` to go substantially `NULL`: they are 100%, 73.9%
+and 36.3% exact-`0.0` today, largely from single-Point series.
+
+**The one visible cost, stated rather than absorbed: overnight solar.** 206 of
+2,671 blanks across 8 zones are `Solar`, and every one falls in UTC hours
+20–05 — a fill from a genuinely published overnight `0.0`, where the A03 hold
+is entirely plausible. They are refused on the same provenance rule, so a
+generation-mix chart now shows a gap rather than a zero at those points. The
+exception proves the rule is worth it: IE_SEM's 44 solar blanks span all 24
+hours, because its document published one Point for the whole day, and Ireland
+does generate solar.
+
+For context on the population this sits in: 15.2% of every reported value in
+`energy_generation` is exactly `0.0` — 5,302,173 cells of 34,849,767, measured
+2026-08-14. **What fraction of the historical zeros are fabricated is not
+measured and is deliberately not estimated from that number**; establishing it
+would mean re-fetching every historical document, and ABL-210 showed that
+verdict is not stable over time anyway. The guard is forward-only: it changes
+what future passes write, and no existing row is backfilled or deleted.
+
+**`energy_renewable` is deliberately unchanged**, verified byte-identical for
+all 15 zones through the real fetch path and pinned by
+`test_energy_renewable_output_is_byte_identical`. `_map_renewable_columns`
+initialises every column to `0.0` and `fillna(0)`s what it maps, so a blanked
+cell reaches the frozen table as the same `0.0` it held before. That table has
+`DEFAULT 0` on every value column and has never been able to express "not
+reported"; teaching it mid-life would leave one condition encoded two ways, and
+its remaining consumer trains models on it. That is a contract change for its
+owner to make deliberately, not a side effect of a guard — see ABL-268's
+handover note for the separate, larger defect that leaves open.
+
 ### Completeness Cache
 
 The `completeness_cache` table stores pre-computed data quality metrics:
