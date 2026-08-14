@@ -169,6 +169,41 @@ pip install -r requirements.txt
 python config.py
 ```
 
+### Running the tests
+
+```bash
+C:\Users\guill\miniconda3\python.exe -m pytest -q tests/
+```
+
+**Name that interpreter explicitly.** This repo has no `.venv`, and two of the three
+Pythons on the workstation cannot run the suite at all. Measured 2026-08-14 against
+`origin/main` at `08358b0`:
+
+| interpreter | result |
+|---|---|
+| `C:\Users\guill\miniconda3\python.exe` (3.11.4) | **287 passed in 28.96s** |
+| `python` first on `PATH` (`C:\Python314`, 3.14.3) | `No module named pytest` — and no `entsoe` or `requests` either, so `python config.py` in Installation above does not run as written on this box |
+| `../energy-forecast/.venv` | **10 collection errors**, `ModuleNotFoundError: No module named 'entsoe'` / `'requests'` |
+
+**The `.venv` failure is the dangerous one, because it looks like a red suite rather
+than a wrong command.** It reports 10 of the 17 test files as `ERROR` — among them
+`test_published_points.py`, `test_generation_published_points.py` and
+`test_net_position_published_points.py`, the three guards this file spends its
+longest section on. Reaching for that `.venv` is the natural mistake, because the
+neighbouring `energy-forecast` repo really does keep its dependencies there.
+
+The tell that separates it from a genuine regression: **a collection error names a
+module, never an assertion**, and it is counted in the `N errors` line rather than
+in `N failed`. If no test name appears in the output, you have the wrong interpreter.
+
+`requirements.txt` pins a floor, not a version (`entsoe-py>=0.7.8`), so the resolved
+library differs by environment: **0.7.11** under miniconda here, against the **0.8.0**
+whose sparse-document forward-fill is the entire reason for the published-points
+guards below. The suite is fixture-driven and asserts against stored documents rather
+than against the library's parsing, so this does not change a result today — but a
+test written against entsoe-py's own behaviour would pass here and prove nothing
+about production.
+
 ### Pipeline Commands
 
 **Backfill historical data:**
