@@ -356,11 +356,17 @@ outcome rather than a metered quantity. Dropping it saves ~29% of the settle pas
 (+11% → +7.7%). Keeping it buys insurance against an assumption nobody has tested upstream. I lean
 to **keeping it** at this price, but it is the CEO's call.
 
-**One thing to trial rather than assume.** I have not verified that ENTSO-E serves a
-42-day window in a single response for every document type — nothing in this codebase has
-ever requested one, and I have no API token on this workstation (§9). Trial it on one
-country before scheduling it; if any type refuses the width, that type needs chunking and
-its request count would then rise in proportion.
+**A 42-day request is already proven in production.** The backfill path splits its range
+into **90-day** chunks (`pipeline.py:73`, default in `utils.get_date_range`,
+`utils.py:129`) and issues them as single requests — including the 2026-07-29 session that
+wrote 3.1 M rows across every country and type. So a 42-day settle window is less than
+half a width this pipeline already exercises routinely against ENTSO-E, and needs no
+chunking. (Note `utils.py:116` says ENTSO-E's own limit is "typically 1 year" and the
+90-day choice is about year-boundary issues in some bidding zones, not about size.)
+
+That said, the update path and the backfill path are different code, so a one-country dry
+run of `update.py --days 42 --types renewable` is still the cheap thing to do before
+adding a cron line — it costs two requests.
 
 **Optional refinement (needs a small code change).** `update.py` takes only `--days`, a
 lookback. A `--days-from/--days-to` band of `[now−44d, now−26d]` would re-fetch only the
