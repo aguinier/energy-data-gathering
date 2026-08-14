@@ -432,6 +432,19 @@ def test_a_grid_that_matches_nothing_keeps_that_column(caplog):
     assert any("matches a published position" in record.message for record in caplog.records)
 
 
+def test_a_non_numeric_column_is_left_alone_not_coerced_to_nan():
+    """The guard coerces to numeric to compare against 0.0, and assigns the
+    coerced Series back. A non-numeric column must never reach that
+    assignment, or guarding the frame would destroy it."""
+    frame = BE_FRAME.copy()
+    frame[("Nuclear", "note")] = "reported late"
+
+    kept, blanked = published_points.blank_unpublished_zeros_by_series(frame, BE_XML)
+
+    assert blanked == 23
+    assert (kept[("Nuclear", "note")] == "reported late").all()
+
+
 @pytest.mark.parametrize("frame", [None, pd.DataFrame()])
 def test_empty_input_is_returned_unchanged(frame):
     kept, blanked = published_points.blank_unpublished_zeros_by_series(frame, BE_XML)

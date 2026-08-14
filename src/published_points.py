@@ -558,6 +558,13 @@ def blank_unpublished_zeros_by_series(
             )
             continue
 
+        # `errors='coerce'` writes NaN over anything non-numeric, and `values`
+        # is what gets assigned back -- so a non-numeric column would be
+        # destroyed rather than guarded. It cannot reach the assignment: the
+        # coercion makes every cell NaN, `NaN == 0.0` is False, `count` is 0,
+        # and the branch below is skipped. Keep the guard inside `if count:`
+        # if this is ever restructured. (entsoe-py `astype(float)`s generation
+        # frames, so today the coercion is a no-op either way.)
         values = pd.to_numeric(df[column], errors='coerce')
         invented_zero = (~is_published) & (values == 0.0).to_numpy()
         count = int(invented_zero.sum())
