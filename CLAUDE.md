@@ -1035,15 +1035,31 @@ All ENTSO-E data tables include `publication_timestamp_utc` to track when ENTSO-
 - `energy_load_forecast`: 100% coverage
 
 **What it represents:**
-The `createdDateTime` from ENTSO-E's XML responses - indicates when ENTSO-E's system last generated/refreshed the data document.
+The `createdDateTime` from ENTSO-E's XML responses, parsed verbatim (`src/entsoe_client.py:307-333`).
 
-**Use cases:**
-- Understanding data revision patterns
-- Analyzing publication delays
-- Tracking when ENTSO-E updates historical data
-- Identifying data freshness
+**Critical caveat — this is our fetch time, not ENTSO-E's publication time.** ENTSO-E builds the
+document on request and stamps `createdDateTime` with the generation moment, so the value records
+when our cron last fetched the row. Two concrete measurements (replica, 2026-08-12):
 
-**Note:** For backfilled historical data, this timestamp reflects when the data was last updated in ENTSO-E's systems, not the original publication date.
+- A GB `energy_load` reading for `2021-03-01T00:00:00` carries
+  `publication_timestamp_utc = 2025-12-29 10:52:44` — four years after the measurement it
+  describes, because that is when a recent cron pass re-fetched it.
+- The BE day-ahead auction for the 2026-08-12 market day was published ~11:45Z on 2026-08-11; the
+  stored rows are stamped `2026-08-12 00:32:38` — our 00:30 cron pass, ~12h45m after the real
+  publication. The column cannot measure publication delay even where a real publication time exists.
+
+**It is overwritten on every re-fetch.** A single GB 2021-03 block of 1,486 rows carries 4 distinct
+`publication_timestamp_utc` values, drifting up to 34 days past their `created_at`. If you want
+"when did we first store this row", use `created_at` — that is write-once.
+
+**Do not use this column for:**
+- Analyzing publication delays (it records fetch time, not publication time)
+- Identifying data freshness (use `data_ingestion_log` or the dashboard's `/api/data-freshness` rules)
+- Tracking when ENTSO-E updates historical data (rewriting on every fetch makes this unrecoverable)
+
+**Note:** For backfilled historical data, `publication_timestamp_utc` is stamped with the date the
+backfill ran — not the original publication date and not the measurement date. This makes it worse
+than `NULL` for any provenance question about when the value was first published.
 
 **Backfilling:** Use `scripts/backfill_publication_timestamps.py` to populate missing timestamps for existing data.
 
