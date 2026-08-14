@@ -150,7 +150,11 @@ Automated pipeline for gathering energy data (load, price, renewable) from the E
 
 **Pipeline Features:**
 - **Backfill Mode:** Fetch historical data for configurable date ranges
-- **Update Mode:** Hourly updates fetching last 7 days (captures delayed uploads & revisions)
+- **Update Mode:** Four passes daily (00:30/06:30/13:30/18:30 UTC, `docker/crontab`)
+  fetching the last 7 days. Captures new publications and delayed uploads. **It does
+  NOT capture revisions** — see "The 7-day window is shorter than the revision horizon"
+  below. (`update.py`'s docstring still says "hourly"; that has not been true since the
+  crontab was written.)
 - **Coverage:** All 39 countries with ENTSO-E domain codes
 - **Error Handling:** Retry with exponential backoff, per-country error isolation
 - **Logging:** Comprehensive logging to `data_ingestion_log` table and log files
@@ -267,13 +271,64 @@ api_key_entsoe=your_api_key_here
 - Retry 3 times with delays: 1s, 2s, 4s
 
 **Date Chunking:**
-- Large date ranges split into 365-day chunks
-- Prevents ENTSO-E API timeout errors
+- **Backfill** splits large ranges into **90-day** chunks (`pipeline.py:73`;
+  `utils.get_date_range`'s default, `utils.py:129`) — not 365, as this file used to say.
+  ENTSO-E's own limit is ~1 year; 90 days is chosen to avoid year-boundary issues in
+  some bidding zones (`utils.py:116`).
+- **Update does not chunk at all.** `pipeline.run_update` computes one `(start, end)` and
+  calls `_fetch_data_chunk` once per (country, data type). Widening `--days` therefore
+  costs **zero** extra ENTSO-E requests — only a bigger payload and more rows upserted.
 - Allows resume after interruption
 
 **Known Issues:**
 - Countries IS, MT, TR have no ENTSO-E data (will be skipped)
-- Some countries have delayed data publication (7-day update window handles this)
+- Some countries have delayed data publication. The 7-day update window does **not**
+  handle this on its own — a zone dark for longer than 7 days is never re-requested once
+  the outage slides out of the window. That is what `scripts/catchup.py` exists for
+  (ABL-84/ABL-85), weekly, and it covers `energy_load` only.
+
+### The 7-day window is shorter than the revision horizon (ABL-442)
+
+**`UPDATE_DAYS_BACK = 7` (`config.py:211`), but ENTSO-E keeps revising a value for about
+28 days.** So the routine job re-fetches inside a window where the upstream number has not
+settled, and then never looks again. Every row freezes on whichever vintage was current
+~7 days after delivery, and which vintage a given row holds is decided by **when someone
+last ran an ad-hoc backfill** — not by policy.
+
+This is the same constant as ABL-85, one defect over: that one was a coverage hole, this
+one is a silent value change on rows we already have.
+
+Measured read-only on the replica 2026-08-14 (`scripts/abl442_revision_horizon_probe.py`,
+full write-up in `reports/abl_442_revision_horizon.md`):
+
+- The boundary is **28.00 days**, located from the data. `energy_generation`'s stored
+  level is flat against age at fetch through 28 days and then steps.
+- **98,582 rows (3.10%) sit on the unrevised side** — every target from **2026-07-01**
+  onward, i.e. the window every gate and accuracy read uses.
+- **10 (country, column) pairs confirm** against an independent third series (the TSO
+  day-ahead forecast). The revision is **not uniformly upward**: NL `wind_onshore` is
+  2.15x, CY `solar` is **0.19x**.
+- **`energy_load` revises too**, at +2.3% (largest placebo movement 0.63%).
+  `energy_price` is bounded, not measured — no same-quantity control exists.
+- **`energy_renewable` is 100% unrevised**, because no ad-hoc backfill writes it. That is
+  what makes it usable as a control, and it means the two generation tables can disagree
+  for a reason that is nothing to do with their column mapping.
+
+**Two traps this leaves for anyone reading these tables:**
+
+1. **`fetched_at` / `created_at` date the LAST write, not the first.** Both are set to
+   `CURRENT_TIMESTAMP` inside an `INSERT OR REPLACE`, which deletes and re-inserts. So
+   `fetched_at - timestamp_utc` is "how old was this instant when we last asked about
+   it" — which is exactly the diagnostic, but is *not* a provenance record of first
+   capture.
+2. **`scripts/catchup.py` does not help here.** It is `energy_load`-only
+   (`catchup.py:71`) and targets interior holes — instants we are *missing* — so it never
+   re-fetches a row we already hold. A revision is a value change on a present row.
+
+**No behaviour has been changed.** A weekly settle pass over a trailing 42 days
+(`+1.3%` requests, `+11%` writes) is proposed on ABL-442 and awaits a CEO decision, as
+does the one-time reconciliation of the already-frozen rows — which **rewrites published
+history in both directions** and therefore follows the ABL-85 norm.
 
 ### Monitoring & Logs
 
