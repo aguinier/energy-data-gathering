@@ -25,8 +25,9 @@ and it killed runs outright.
 - **Baselines rot.** Record counts, coverage percentages, database size and
   date ranges have a shelf life measured in weeks; keep the query that
   re-measures, not the figure.
-- After editing this file: `python -m pytest tests/test_claude_md_budget.py`
-  must pass.
+- After editing this file:
+  `C:\Users\guill\miniconda3\python.exe -m pytest tests/test_claude_md_budget.py`
+  must pass — see Testing for why the interpreter is spelled out.
 
 ## Repository Overview
 
@@ -100,7 +101,7 @@ tests/                     # pytest, colocated with nothing — all tests live h
 ## Commands
 
 ```bash
-pip install -r requirements.txt      # see Testing for the interpreter that already has these
+pip install -r requirements.txt      # the miniconda interpreter already has these
 python config.py                     # verify configuration
 
 python scripts/update.py                                    # routine pass: last 7 days, all types
@@ -111,6 +112,11 @@ python scripts/catchup.py                                   # heal interior ener
 python scripts/update_weather.py --forecast                 # legacy weather_data
 python scripts/update_weather_observation_hourly.py         # versioned weather_observation
 ```
+
+**`python` above means the miniconda3 interpreter** — on the workstation,
+`C:\Users\guill\miniconda3\python.exe`. The `python` first on `PATH` is 3.14.3
+with neither `entsoe` nor `requests`, so even `python config.py` does not run as
+written under it. See Testing.
 
 **Date chunking asymmetry.** Backfill splits a range into **90-day** chunks
 (`src/pipeline.py:73`, `utils.py:129`) — ENTSO-E's own limit is ~1 year, but 90
@@ -150,8 +156,9 @@ crontab was written.
 second request to fill one of them — `test_only_one_upstream_request_per_leg`
 pins this.
 
-**`NULL`, never a manufactured `0`.** entsoe-py 0.8.0 expands a sparse `Period`
-by forward-filling the last published value across every missing position, and we
+**`NULL`, never a manufactured `0`.** entsoe-py expands a sparse `Period` by
+forward-filling the last published value across every missing position (measured
+on 0.8.0, the version production resolves — see Testing, the floor pin), and we
 used to store that fill as measured data. `src/published_points.py` is the single
 rule that refuses it, applied on all three paths that hit it — load (ABL-50), net
 position (ABL-55) and generation (ABL-268). It drops a value only when it is
@@ -290,13 +297,26 @@ Country-by-country quality analysis lives in `database_completeness.md`.
 ## Testing
 
 ```bash
-python -m pytest -q          # from the repo root
+C:\Users\guill\miniconda3\python.exe -m pytest -q tests/   # from the repo root
 ```
 
-**Use the miniconda3 interpreter** (`C:\Users\guill\miniconda3\python.exe` on the
-workstation) — it already has every dependency. **Do not build a venv for this
-repo:** a fresh one is missing deps and produces a fake red suite that looks like
-your change broke something.
+**Name that interpreter explicitly** (ABL-268). This repo has no `.venv`, and
+neither of the other two Pythons on the workstation can run the suite: the one
+first on `PATH` has no `pytest`, and `../energy-forecast/.venv` has no `entsoe`
+or `requests`. **Do not build a venv for this repo** — the `.venv` failure is the
+dangerous one, because it reports most test *files* as `ERROR` and reads as a red
+suite rather than as a wrong command. The tell: **a collection error names a
+module, never an assertion**, and it lands in the `N errors` line, not `N failed`.
+If no test name appears in the output, the interpreter is wrong, not your change.
+
+**The resolved entsoe-py version differs between here and production.**
+`requirements.txt` pins a floor, not a version (`entsoe-py>=0.7.8`): miniconda
+resolves **0.7.11** here against **0.8.0** in production — the version whose
+sparse-`Period` forward-fill is the entire reason for the published-points rule
+above. The suite is fixture-driven and asserts against stored documents, so this
+changes no result today; but **a test written against the library's own parsing
+passes here and proves nothing about production.** Assert against a stored
+document, never against what entsoe-py does with it.
 
 Baselines rot, so the durable half is the delta: re-measure on the merged tree
 rather than trusting a count written here. Everything lives in `tests/`, one file
@@ -310,9 +330,11 @@ test to run after editing it.
 `docs/claude/` holds the full pre-2026-08-27 narrative this file was distilled
 from (ABL-574), one file per former section — incident forensics, dated
 measurements, worked SQL, design rationale. It is verbatim: the twenty files
-round-trip to the original 51,430-byte document byte-for-byte. Figures and
-citations in there are frozen at the archive date. Start with the matching topic
-file whenever a rule here needs its evidence or history.
+round-trip byte-for-byte to `362434b:CLAUDE.md`, the 53,417-byte pre-trim
+document this branch merged (sha256 `b37c9a3d…`) — strip each file's 6-line
+banner, concatenate in name order joined by a blank line, prepend the 4-line
+preamble. Figures and citations in there are frozen at the archive date. Start
+with the matching topic file whenever a rule here needs its evidence or history.
 
 | File | Was |
 |---|---|
@@ -320,7 +342,7 @@ file whenever a rule here needs its evidence or history.
 | `02-data-types.md` | Per-type coverage, granularity, date ranges |
 | `03-countries-covered.md` | Country lists by region |
 | `04-database-architecture.md` | Star schema, time-series patterns |
-| `05-entso-e-data-gathering-pipeline.md` | Pipeline detail, ABL-442 revision-horizon measurements, ABL-86 redaction forensics |
+| `05-entso-e-data-gathering-pipeline.md` | Pipeline detail, the ABL-268 three-interpreter measurement table, ABL-442 revision-horizon measurements, ABL-86 redaction forensics |
 | `06-weather-data-pipeline.md` | Legacy `weather_data` commands, forecast vintages, worked SQL |
 | `07-versioned-weather-db-weather-observation-2026-04-22.md` | `weather_observation` consumers and extension rules |
 | `08-common-database-operations.md` | Worked query and maintenance recipes |
