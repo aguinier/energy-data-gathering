@@ -36,6 +36,20 @@ from the **ENTSO-E Transparency Platform** and weather from **Open-Meteo**, and
 writes both into the shared SQLite database. It is the only writer; everything
 downstream opens that file readonly.
 
+**Replica sync lock window (ABL-612/613):** the Windows Scheduled Task
+`able-db-sync` fires `scripts/workstation/sync-db-v2.ps1 -TablesOnly` at
+**07:00 and 16:30 Europe/Brussels** daily. Its Stage 2 drops and rebuilds all
+~29 non-weather tables inside one `BEGIN IMMEDIATE … COMMIT` transaction,
+which holds an `EXCLUSIVE` lock for the full duration — every downstream
+reader (dashboard API, energy-forecast, sqlite3 CLI) gets `database is locked`
+and returns instantly; `busy_timeout` does not help against `EXCLUSIVE`. A
+clean run takes ~28–30 min; overruns up to ~60 min have been observed on
+loaded hardware. Before treating a lock error as an incident, check the clock
+against those windows and tail `C:\Code\able\logs\sync-db-v2.log` — if it
+ends without a `Done.` line and `energy_dashboard.db-journal`'s mtime is
+still advancing, the writer is alive and the lock is expected. Do not delete
+the journal.
+
 **Reference documents** (all authoritative over this file on their own subject):
 
 | Document | Covers |
