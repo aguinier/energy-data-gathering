@@ -341,8 +341,14 @@ def upsert_load_data(df, country_code):
 def log_ingestion_start(pipeline_type, country_code):
     """Create log entry, return log_id"""
 
-def log_ingestion_complete(log_id, records_inserted, error_message):
-    """Update log entry with results"""
+def log_ingestion_complete(log_id, records_inserted=0, records_updated=0,
+                           records_failed=0, error_message=None):
+    """Update log entry with results.
+
+    status is derived from the counts (resolve_ingestion_status), not from
+    whether error_message was passed. Safe to call twice for one log_id: the
+    reason already stored is never overwritten with NULL.
+    """
 ```
 
 **Completeness Cache:**
@@ -1138,9 +1144,9 @@ SELECT * FROM latest_data_by_country WHERE country_code = 'DE';
 SELECT * FROM data_ingestion_log
 ORDER BY start_time DESC LIMIT 10;
 
--- Failed runs
+-- Failed runs ('partial_failure' and a stuck 'running' are failures too)
 SELECT * FROM data_ingestion_log
-WHERE status = 'failed';
+WHERE status != 'completed';
 
 -- Record counts
 SELECT

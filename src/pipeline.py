@@ -282,37 +282,43 @@ class ENTSOEPipeline:
         """
         log_id = db.log_ingestion_start(data_type, country_code)
         try:
+            # `log_id` is threaded into every fetcher so the exception it catches
+            # lands on the log row it belongs to. This path used to omit it,
+            # which is why the scheduled pipeline -- the one that runs in prod --
+            # produced `records_failed = 1` rows with a NULL `error_message` and
+            # no forensic trail (ABL-633). The summary call below no longer
+            # overwrites what the fetcher recorded; see db.log_ingestion_complete.
             if data_type == 'load':
                 inserted, updated, failed = fetch_load.fetch_load_data(
-                    self.client, country_code, start, end
+                    self.client, country_code, start, end, log_id
                 )
             elif data_type == 'price':
                 inserted, updated, failed = fetch_price.fetch_price_data(
-                    self.client, country_code, start, end
+                    self.client, country_code, start, end, log_id
                 )
             elif data_type == 'renewable':
                 inserted, updated, failed = fetch_renewable.fetch_renewable_data(
-                    self.client, country_code, start, end
+                    self.client, country_code, start, end, log_id
                 )
             elif data_type == 'load_forecast_day_ahead':
                 inserted, updated, failed = fetch_load_forecast.fetch_load_forecast_data(
-                    self.client, country_code, start, end, 'day_ahead'
+                    self.client, country_code, start, end, 'day_ahead', log_id
                 )
             elif data_type == 'load_forecast_week_ahead':
                 inserted, updated, failed = fetch_load_forecast.fetch_load_forecast_data(
-                    self.client, country_code, start, end, 'week_ahead'
+                    self.client, country_code, start, end, 'week_ahead', log_id
                 )
             elif data_type == 'wind_solar_forecast':
                 inserted, updated, failed = fetch_wind_solar_forecast.fetch_wind_solar_forecast_data(
-                    self.client, country_code, start, end
+                    self.client, country_code, start, end, log_id
                 )
             elif data_type == 'crossborder_flows':
                 inserted, updated, failed = fetch_crossborder_flows.fetch_crossborder_flows_data(
-                    self.client, country_code, start, end
+                    self.client, country_code, start, end, log_id
                 )
             elif data_type == 'net_position':
                 inserted, updated, failed = fetch_net_position.fetch_net_position_data(
-                    self.client, country_code, start, end
+                    self.client, country_code, start, end, log_id
                 )
             else:
                 msg = f"Unknown data type: {data_type}"

@@ -1147,6 +1147,70 @@ def upsert_net_position(
 # ============================================================================
 
 
+# Terminal states for data_ingestion_log.status. The column is plain
+# `TEXT NOT NULL` with no CHECK constraint, so widening the vocabulary is a
+# write-side change only -- no schema migration against the shared database.
+INGESTION_STATUS_RUNNING = "running"
+INGESTION_STATUS_COMPLETED = "completed"
+INGESTION_STATUS_PARTIAL = "partial_failure"
+INGESTION_STATUS_FAILED = "failed"
+
+# Anything a monitor should treat as "this pass did not do its job".
+INGESTION_FAILURE_STATUSES = frozenset(
+    {INGESTION_STATUS_PARTIAL, INGESTION_STATUS_FAILED}
+)
+
+# Written when a pass is known to have failed but no caller supplied a reason.
+# This states the absence of evidence; it does not invent one.
+NO_ERROR_DETAIL_CAPTURED = "no error detail captured"
+
+
+def resolve_ingestion_status(
+    records_inserted: int = 0,
+    records_updated: int = 0,
+    records_failed: int = 0,
+    error_message: Optional[str] = None,
+) -> str:
+    """
+    Map a pass outcome onto a terminal `data_ingestion_log.status`.
+
+    Before ABL-633 this was `"failed" if error_message else "completed"`, which
+    ignored `records_failed` entirely. Every caller that reports a failure count
+    does so *without* an error message (`src/pipeline.py`, `src/fetch_*.py`,
+    `scripts/update_weather.py`), so a pass that failed still wrote
+    `completed` and nothing downstream could alert on it -- measured over the
+    2026-08-30..09-02 degradation, all ~1,015-1,280 passes/day wrote `completed`
+    while `records_failed` reached 770/day.
+
+    `partial_failure` is reachable by contract but not by any current caller:
+    every fetcher's error path returns `(0, 0, 1)` -- `fetch_load.py:70`,
+    `fetch_price.py:70`, `fetch_renewable.py:103`, `fetch_load_forecast.py:81`,
+    `fetch_wind_solar_forecast.py:72`, `fetch_crossborder_flows.py:154`,
+    `fetch_net_position.py:95`, `fetch_weather.py:203,241,447,490` -- so a
+    failure count never coexists with stored rows today. It is defined so that
+    the alertable predicate is `status != 'completed'` regardless of whether a
+    future fetcher learns to report per-row failures.
+
+    Args:
+        records_inserted: Number of records inserted
+        records_updated: Number of records updated
+        records_failed: Number of records that failed
+        error_message: Error message if failed (optional)
+
+    Returns:
+        One of INGESTION_STATUS_COMPLETED / _PARTIAL / _FAILED
+    """
+    failed = records_failed or 0
+    if failed <= 0 and not error_message:
+        return INGESTION_STATUS_COMPLETED
+
+    stored = (records_inserted or 0) + (records_updated or 0)
+    if stored > 0:
+        return INGESTION_STATUS_PARTIAL
+
+    return INGESTION_STATUS_FAILED
+
+
 def log_ingestion_start(pipeline_type: str, country_code: Optional[str] = None) -> int:
     """
     Log the start of a data ingestion process
@@ -1188,8 +1252,21 @@ def log_ingestion_complete(
         records_updated: Number of records updated
         records_failed: Number of records that failed
         error_message: Error message if failed (optional)
+
+    Calling this twice for the same `log_id` is normal: a fetcher records the
+    exception it caught, then its caller records the run totals. The second call
+    used to overwrite `error_message` with `NULL` -- the reason there was not a
+    single non-empty `error_message` in the whole table. `COALESCE` below keeps
+    the first reason written for a pass, so the summary call can no longer erase
+    the diagnosis. Precedence: reason passed here, else one already stored, else
+    an explicit "we did not capture one" marker on a failure, else NULL.
     """
-    status = "failed" if error_message else "completed"
+    status = resolve_ingestion_status(
+        records_inserted, records_updated, records_failed, error_message
+    )
+    fallback = (
+        NO_ERROR_DETAIL_CAPTURED if status in INGESTION_FAILURE_STATUSES else None
+    )
 
     with get_connection() as conn:
         cursor = conn.cursor()
@@ -1201,7 +1278,7 @@ def log_ingestion_complete(
                 records_inserted = ?,
                 records_updated = ?,
                 records_failed = ?,
-                error_message = ?
+                error_message = COALESCE(?, error_message, ?)
             WHERE id = ?
         """,
             (
@@ -1211,6 +1288,7 @@ def log_ingestion_complete(
                 records_updated,
                 records_failed,
                 error_message,
+                fallback,
                 log_id,
             ),
         )

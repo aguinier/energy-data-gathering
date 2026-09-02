@@ -297,11 +297,17 @@ FROM data_ingestion_log
 ORDER BY start_time DESC
 LIMIT 20;
 
--- Check for failures
+-- Check for failures. `!= 'completed'` and not `= 'failed'`: a pass that stored
+-- some rows and failed others is `partial_failure`, and a pass whose process
+-- died is still `running`. Both are failures a `= 'failed'` query drops.
 SELECT * FROM data_ingestion_log
-WHERE status = 'failed'
+WHERE status != 'completed'
 ORDER BY start_time DESC;
 ```
+
+Before ABL-633 that query returned nothing however bad the outage was: `status` was
+`"failed" if error_message else "completed"` and no caller reporting a failure count also passed a
+message, so every pass wrote `completed`. See `database_structure.md` for the status vocabulary.
 
 **Data Freshness:**
 ```sql
