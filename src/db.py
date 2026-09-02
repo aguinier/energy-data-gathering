@@ -1228,9 +1228,14 @@ def log_ingestion_start(pipeline_type: str, country_code: Optional[str] = None) 
             """
             INSERT INTO data_ingestion_log
             (pipeline_type, country_code, start_time, status)
-            VALUES (?, ?, ?, 'running')
+            VALUES (?, ?, ?, ?)
         """,
-            (pipeline_type, country_code, datetime.now(pytz.UTC).isoformat()),
+            (
+                pipeline_type,
+                country_code,
+                datetime.now(pytz.UTC).isoformat(),
+                INGESTION_STATUS_RUNNING,
+            ),
         )
 
         return cursor.lastrowid
