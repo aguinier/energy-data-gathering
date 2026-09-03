@@ -347,12 +347,31 @@ ETL pipeline execution audit trail.
 - `country_code` TEXT - Country being processed
 - `start_time` TIMESTAMP NOT NULL - Pipeline start time
 - `end_time` TIMESTAMP - Pipeline completion time
-- `status` TEXT NOT NULL - Execution status ('running', 'completed', 'failed')
+- `status` TEXT NOT NULL - Execution status ('running', 'completed', 'partial_failure', 'failed')
 - `records_inserted` INTEGER DEFAULT 0 - Number of records inserted
 - `records_updated` INTEGER DEFAULT 0 - Number of records updated
-- `records_failed` INTEGER DEFAULT 0 - Number of failed records
-- `error_message` TEXT - Error details if failed
+- `records_failed` INTEGER DEFAULT 0 - Failure count for the pass. Every fetcher's error path
+  returns `(0, 0, 1)`, so in practice this is a run-level flag, not a row count
+- `error_message` TEXT - Why the pass failed. `'no error detail captured'` when a pass is known to
+  have failed but no caller supplied a reason -- that string asserts the absence of evidence, it is
+  not a diagnosis
 - `created_at` TIMESTAMP - Record creation timestamp
+
+**Status vocabulary** (`src/db.py:resolve_ingestion_status`, ABL-633):
+- `running` - written by `log_ingestion_start`; a row still `running` means the process died
+- `completed` - `records_failed = 0`. Includes the pass that checked and found nothing published;
+  that is not a failure, and the dashboard reads it as "checked, no data"
+- `partial_failure` - `records_failed > 0` **and** rows were stored. Reachable by contract, not by
+  any current caller (see `records_failed` above)
+- `failed` - `records_failed > 0` and nothing was stored
+
+The alertable predicate is `status != 'completed'`. Before ABL-633, status was
+`"failed" if error_message else "completed"` and no caller that reports a failure count also passes
+a message, so `records_failed` never influenced `status`: through the 2026-08-30..09-02 degradation
+every one of ~1,280 passes/day wrote `completed` while `records_failed` reached 770/day.
+
+The column is plain `TEXT NOT NULL` with no CHECK constraint, so this widening is a write-side
+change -- no migration against the shared database.
 
 **Indexes:**
 - `idx_ingestion_log_pipeline` ON (pipeline_type, start_time DESC)
