@@ -16,6 +16,7 @@ import config
 import utils
 from . import db
 from .entsoe_client import ENTSOEClient
+from .fetch_result import error_of
 from . import fetch_load, fetch_price, fetch_renewable, fetch_load_forecast, fetch_wind_solar_forecast
 from . import fetch_crossborder_flows, fetch_net_position
 
@@ -38,6 +39,13 @@ class ENTSOEPipeline:
             'total_countries': 0,
             'successful_countries': 0,
             'failed_countries': 0,
+            # ABL-61. `successful_countries` counts countries whose every data
+            # type came back without raising -- which a country with no data
+            # upstream also satisfies. These two say what was actually stored
+            # and how many (data type, country) targets errored, which is what
+            # a supervisor needs to tell an outage from a quiet zone.
+            'countries_with_records': 0,
+            'failed_targets': 0,
             'by_data_type': {}
         }
 
@@ -195,6 +203,7 @@ class ENTSOEPipeline:
 
             # Process each data type
             country_success = True
+            records_before_country = self.stats['total_records']
             for data_type in data_types:
                 # Use extended end date for day-ahead data types
                 if include_dayahead and config.is_dayahead_data_type(data_type):
@@ -226,9 +235,14 @@ class ENTSOEPipeline:
             else:
                 self.stats['failed_countries'] += 1
 
+            if self.stats['total_records'] > records_before_country:
+                self.stats['countries_with_records'] += 1
+
             progress.update(item=f"{country_code} ({'ok' if country_success else 'FAIL'})")
 
         progress.finish()
+
+        self.stats['total_countries'] = len(countries)
 
         # Update completeness cache
         logger.info("\nUpdating completeness cache...")
@@ -236,6 +250,10 @@ class ENTSOEPipeline:
 
         # Print summary
         self._print_summary()
+
+        # Returned so `scripts/update.py` can judge the pass (ABL-61). The
+        # numbers were always here; nothing outside this object could see them.
+        return self.stats
 
     # ========================================================================
     # HELPER METHODS
@@ -283,58 +301,79 @@ class ENTSOEPipeline:
         log_id = db.log_ingestion_start(data_type, country_code)
         try:
             if data_type == 'load':
-                inserted, updated, failed = fetch_load.fetch_load_data(
+                result = fetch_load.fetch_load_data(
                     self.client, country_code, start, end
                 )
             elif data_type == 'price':
-                inserted, updated, failed = fetch_price.fetch_price_data(
+                result = fetch_price.fetch_price_data(
                     self.client, country_code, start, end
                 )
             elif data_type == 'renewable':
-                inserted, updated, failed = fetch_renewable.fetch_renewable_data(
+                result = fetch_renewable.fetch_renewable_data(
                     self.client, country_code, start, end
                 )
             elif data_type == 'load_forecast_day_ahead':
-                inserted, updated, failed = fetch_load_forecast.fetch_load_forecast_data(
+                result = fetch_load_forecast.fetch_load_forecast_data(
                     self.client, country_code, start, end, 'day_ahead'
                 )
             elif data_type == 'load_forecast_week_ahead':
-                inserted, updated, failed = fetch_load_forecast.fetch_load_forecast_data(
+                result = fetch_load_forecast.fetch_load_forecast_data(
                     self.client, country_code, start, end, 'week_ahead'
                 )
             elif data_type == 'wind_solar_forecast':
-                inserted, updated, failed = fetch_wind_solar_forecast.fetch_wind_solar_forecast_data(
+                result = fetch_wind_solar_forecast.fetch_wind_solar_forecast_data(
                     self.client, country_code, start, end
                 )
             elif data_type == 'crossborder_flows':
-                inserted, updated, failed = fetch_crossborder_flows.fetch_crossborder_flows_data(
+                result = fetch_crossborder_flows.fetch_crossborder_flows_data(
                     self.client, country_code, start, end
                 )
             elif data_type == 'net_position':
-                inserted, updated, failed = fetch_net_position.fetch_net_position_data(
+                result = fetch_net_position.fetch_net_position_data(
                     self.client, country_code, start, end
                 )
             else:
                 msg = f"Unknown data type: {data_type}"
                 logger.error(msg)
+                self.stats['failed_targets'] += 1
                 db.log_ingestion_complete(log_id, records_failed=1, error_message=msg)
                 return False
 
+            inserted, updated, failed = result
+
+            # ABL-61: the reason, not just the count. The fetchers catch their
+            # own exceptions, so this call site only ever saw `(0, 0, 1)` and
+            # wrote `records_failed = 1` with `error_message` NULL -- which is
+            # every one of the 2,370 failure rows the ABL-630 window left behind,
+            # and why that four-day outage has no diagnosis.
+            error_message = error_of(result)
+            if failed and not error_message:
+                # A fetcher that reports failure without a reason still gets one.
+                # That row shape must not be reachable from any path.
+                error_message = (
+                    f"{data_type} failed for {country_code} (fetcher recorded no reason)"
+                )
+
             # Update total records
             self.stats['total_records'] += inserted
+            if failed:
+                self.stats['failed_targets'] += 1
 
             db.log_ingestion_complete(
                 log_id,
                 records_inserted=inserted,
                 records_updated=updated,
                 records_failed=failed,
+                error_message=error_message,
             )
 
             return failed == 0
 
         except Exception as e:
-            logger.error(f"Error fetching {data_type} data for {country_code}: {e}")
-            db.log_ingestion_complete(log_id, records_failed=1, error_message=str(e))
+            error_msg = utils.format_error(e, f"{data_type}/{country_code}")
+            logger.error(error_msg)
+            self.stats['failed_targets'] += 1
+            db.log_ingestion_complete(log_id, records_failed=1, error_message=error_msg)
             return False
 
     def _print_summary(self):
@@ -345,7 +384,9 @@ class ENTSOEPipeline:
         logger.info(f"Total countries processed: {self.stats['successful_countries'] + self.stats['failed_countries']}")
         logger.info(f"  Successful: {self.stats['successful_countries']}")
         logger.info(f"  Failed: {self.stats['failed_countries']}")
+        logger.info(f"  Countries that stored at least one record: {self.stats['countries_with_records']}")
         logger.info(f"Total records inserted: {self.stats['total_records']}")
+        logger.info(f"Failed (data type, country) targets: {self.stats['failed_targets']}")
 
         logger.info("\nBy data type:")
         for data_type, stats in self.stats['by_data_type'].items():
@@ -396,12 +437,16 @@ def update(
         data_types: List of data types to fetch (default: all)
         countries: List of country codes (default: all)
         include_dayahead: If True, extend end date to D+1 for day-ahead data types
+
+    Returns:
+        The pass statistics dict (see ENTSOEPipeline.stats) -- what
+        `scripts/update.py` judges the pass on.
     """
     if data_types is None:
         data_types = ['load', 'price', 'renewable']
 
     pipeline = ENTSOEPipeline()
-    pipeline.run_update(days_back, data_types, countries, include_dayahead)
+    return pipeline.run_update(days_back, data_types, countries, include_dayahead)
 
 
 if __name__ == "__main__":

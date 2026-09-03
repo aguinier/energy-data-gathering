@@ -8,6 +8,7 @@ from typing import Optional, Tuple
 
 from . import db
 from .entsoe_client import ENTSOEClient, ENTSOENoDataError
+from .fetch_result import FetchResult
 import utils
 
 
@@ -75,10 +76,10 @@ def fetch_load_forecast_data(
             db.log_ingestion_complete(
                 log_id,
                 records_failed=1,
-                error_message=str(e)
+                error_message=error_msg,
             )
 
-        return 0, 0, 1
+        return FetchResult.failure(error_msg)
 
 
 def fetch_load_forecast_for_country(

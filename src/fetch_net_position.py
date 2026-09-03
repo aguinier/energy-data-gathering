@@ -14,6 +14,7 @@ import pandas as pd
 from . import db
 import utils
 from .entsoe_client import ENTSOEClient
+from .fetch_result import FetchResult
 
 logger = logging.getLogger("energy_data_gathering.fetch_net_position")
 
@@ -89,7 +90,8 @@ def fetch_net_position_data(
         return records_inserted, 0, 0
 
     except Exception as e:
-        logger.error(f"Error fetching net position for {country_code}: {e}")
+        error_msg = utils.format_error(e, f"fetch_net_position_data({country_code})")
+        logger.error(error_msg)
         if log_id:
-            db.log_ingestion_complete(log_id, records_failed=1, error_message=str(e))
-        return 0, 0, 1
+            db.log_ingestion_complete(log_id, records_failed=1, error_message=error_msg)
+        return FetchResult.failure(error_msg)

@@ -8,6 +8,7 @@ from typing import Optional, Tuple
 
 from . import db
 from .entsoe_client import ENTSOEClient, ENTSOENoDataError
+from .fetch_result import FetchResult
 import utils
 
 
@@ -64,10 +65,13 @@ def fetch_load_data(
             db.log_ingestion_complete(
                 log_id,
                 records_failed=1,
-                error_message=str(e)
+                error_message=error_msg,
             )
 
-        return 0, 0, 1
+        # The reason travels with the count. `pipeline._fetch_data_chunk` calls
+        # this without a log_id, so before ABL-61 the branch above never ran and
+        # the row went to the database as `records_failed = 1`, reason NULL.
+        return FetchResult.failure(error_msg)
 
 
 def fetch_load_for_country(

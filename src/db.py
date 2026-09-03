@@ -12,6 +12,7 @@ import pytz
 
 import config
 import utils
+from .log_redaction import redact_secrets
 
 
 logger = logging.getLogger("entsoe_pipeline")
@@ -1147,6 +1148,22 @@ def upsert_net_position(
 # ============================================================================
 
 
+#: `pipeline_type` of the one row that stands for a whole `update.py` pass
+#: (ABL-61). Every other row in this table is one (data type, country) target;
+#: this one is the pass itself, with `country_code` NULL, and it exists so that
+#: "what did a healthy pass store?" is a question the table can answer without
+#: reconstructing pass boundaries from 312 rows' timestamps.
+#:
+#: Only a *full* pass writes one — all countries, all types, the default
+#: window. A `--types price --days 2` run stores a fraction of what a full pass
+#: does and would poison the baseline it is compared against.
+PASS_PIPELINE_TYPE = "update_pass"
+
+#: Cap on what goes into `error_message`. An upstream 5xx can carry a whole HTML
+#: page; the first line is the diagnosis and the rest is column bloat.
+MAX_ERROR_MESSAGE_CHARS = 500
+
+
 def log_ingestion_start(pipeline_type: str, country_code: Optional[str] = None) -> int:
     """
     Log the start of a data ingestion process
@@ -1188,7 +1205,16 @@ def log_ingestion_complete(
         records_updated: Number of records updated
         records_failed: Number of records that failed
         error_message: Error message if failed (optional)
+
+    The message is **redacted and truncated here**, not at the call site. An
+    ENTSO-E `HTTPError` stringifies to the full request URL, `securityToken=`
+    included (ABL-86), and until ABL-61 this column was never populated at all —
+    0 of 3,230 rows carry a message — so every caller that starts writing one is
+    a new chance to write the credential into the shared database. Central, for
+    the same reason `log_redaction` is central: a rule at 17 call sites has to be
+    remembered at the 18th.
     """
+    error_message = _safe_error_message(error_message)
     status = "failed" if error_message else "completed"
 
     with get_connection() as conn:
@@ -1214,6 +1240,65 @@ def log_ingestion_complete(
                 log_id,
             ),
         )
+
+
+def _safe_error_message(error_message: Optional[str]) -> Optional[str]:
+    """Redact, collapse to one line, and truncate — or return ``None``.
+
+    An all-whitespace message is treated as no message: it would set
+    ``status = 'failed'`` while telling the next reader exactly as much as the
+    NULL it replaced.
+    """
+    if error_message is None:
+        return None
+
+    text = redact_secrets(str(error_message)).strip()
+    if not text:
+        return None
+
+    text = " ".join(text.split())
+    if len(text) > MAX_ERROR_MESSAGE_CHARS:
+        text = text[: MAX_ERROR_MESSAGE_CHARS - 3] + "..."
+    return text
+
+
+def recent_pass_totals(limit: int) -> List[int]:
+    """Stored-record counts of the most recent **healthy** full passes, newest first.
+
+    The baseline `src/pass_verdict.py` compares against. Two filters carry the
+    weight:
+
+    - ``error_message IS NULL`` selects passes this repo itself judged healthy,
+      not merely finished. Without it a four-day collapse teaches the baseline
+      that a collapse is normal, and the alarm silences itself on day two —
+      which is the shape ABL-630 actually had.
+    - ``end_time IS NOT NULL`` drops the in-flight pass, including the one
+      asking the question.
+
+    Returns an empty list when the table has no pass rows yet, which
+    ``classify_pass`` reads as "not enough history to judge volume". A cold
+    start after deploy must not alarm.
+    """
+    if limit <= 0:
+        return []
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        rows = cursor.execute(
+            """
+            SELECT records_inserted
+              FROM data_ingestion_log
+             WHERE pipeline_type = ?
+               AND end_time IS NOT NULL
+               AND error_message IS NULL
+               AND records_inserted IS NOT NULL
+             ORDER BY id DESC
+             LIMIT ?
+            """,
+            (PASS_PIPELINE_TYPE, limit),
+        ).fetchall()
+
+    return [int(row[0]) for row in rows]
 
 
 # ============================================================================
