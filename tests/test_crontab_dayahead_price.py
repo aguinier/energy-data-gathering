@@ -36,21 +36,29 @@ PUBLICATION_UTC_MINUTES = {
 # The full update that used to be the first and only chance.
 FULL_AFTERNOON_PASS_MINUTES = 13 * 60 + 30
 
+# How an update pass can be spelled in the crontab. Since ABL-61 the scheduled
+# form is the wrapper, which runs update.py and surfaces its exit code; the bare
+# form is still recognised because the schedule properties below are about when
+# a price-capable pass runs, not about which of the two starts it.
+UPDATE_INVOCATIONS = ("scripts/update.py", "scripts/run_update_pass.sh")
+
 
 def _update_jobs() -> list[tuple[int, str]]:
-    """Every `scripts/update.py` cron line, as (minutes past midnight UTC, command).
+    """Every update-pass cron line, as (minutes past midnight UTC, command).
 
     Only the fixed-time daily form (`M H * * *`) is recognised; nothing in this
-    file schedules `update.py` any other way, and a silently unparsed line would
-    be worse than a failure here.
+    file schedules an update pass any other way, and a silently unparsed line
+    would be worse than a failure here.
     """
     jobs: list[tuple[int, str]] = []
     for raw in CRONTAB.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
-        if not line or line.startswith("#") or "scripts/update.py" not in line:
+        if not line or line.startswith("#"):
+            continue
+        if not any(invocation in line for invocation in UPDATE_INVOCATIONS):
             continue
         m = re.match(r"^(\d+)\s+(\d+)\s+\*\s+\*\s+\*\s+(.*)$", line)
-        assert m, f"unrecognised schedule for an update.py job: {line!r}"
+        assert m, f"unrecognised schedule for an update pass job: {line!r}"
         minute, hour, command = int(m.group(1)), int(m.group(2)), m.group(3)
         jobs.append((hour * 60 + minute, command))
     return jobs
@@ -69,7 +77,7 @@ def _fetches_price(command: str) -> bool:
 
 def test_crontab_exists_and_schedules_updates() -> None:
     assert CRONTAB.is_file(), f"{CRONTAB} is the schedule the image installs"
-    assert _update_jobs(), "no scripts/update.py job is scheduled at all"
+    assert _update_jobs(), "no update-pass job is scheduled at all"
 
 
 @pytest.mark.parametrize("regime, published_at", sorted(PUBLICATION_UTC_MINUTES.items()))

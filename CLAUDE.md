@@ -150,8 +150,8 @@ the index, all times UTC.
 
 | When | Job |
 |---|---|
-| `30 0,6,13,18` | `update.py` — full pass, trailing 7 days, all types |
-| `15 11` and `15 12` | `update.py --types price --days 2` — D+1 price, right after the SDAC publication (ABL-54/ABL-51) |
+| `30 0,6,13,18` | `run_update_pass.sh` — full pass, trailing 7 days, all types |
+| `15 11` and `15 12` | `run_update_pass.sh --types price --days 2 --no-pass-retry` — D+1 price, right after the SDAC publication (ABL-54/ABL-51) |
 | `0 15` | `update_weather.py --forecast` — legacy `weather_data` |
 | `30 * * * *` | `update_weather_observation_hourly.py` — realtime NWP pull |
 | `0 7`, `30 13`, `30 19` | `update_weather_observation.py` — adds Previous Runs (day1-3) |
@@ -160,8 +160,18 @@ the index, all times UTC.
 The two price lines are not redundancy for its own sake: the day-ahead auction
 publishes at ~10:45 UTC (CEST) or ~11:45 UTC (CET), and without them the first
 pass that can see tomorrow's price is 13:30 — the only one before evening.
-`update.py`'s own docstring still says "hourly"; that has not been true since the
-crontab was written.
+
+**Cron calls `scripts/run_update_pass.sh`, not `update.py` directly** (ABL-61):
+`>> log 2>&1` throws the exit code away, so the wrapper is what turns a non-zero
+pass into an `INGEST-PASS-FAILED` line in `cron_update.log` and on the
+container's stdout. Grep the schedule for `run_update_pass`, not `update.py`.
+`update.py`'s exit codes: `0` healthy, `1` config error or the pipeline raised,
+`2` the pass stored nothing anywhere, `3` volume collapse against its own recent
+baseline. A `2` re-runs the **whole pass** first
+(`config.PASS_RETRY_DELAYS_SECONDS`, 5 then 15 minutes) — `MAX_RETRIES` /
+`RETRY_BACKOFF_SECONDS` are per-request and cannot survive a multi-minute
+outage; a `3` never retries. Only a full pass (all types, all countries,
+`UPDATE_DAYS_BACK`) is volume-checked or recorded as a baseline.
 
 ## Rules that bite
 

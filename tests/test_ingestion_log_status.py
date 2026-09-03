@@ -275,9 +275,13 @@ def test_pipeline_hands_the_log_id_to_every_fetcher(
     monkeypatch.setattr(pipeline.db, "log_ingestion_complete", lambda *a, **k: None)
 
     # Bypass __init__: constructing ENTSOEPipeline builds a live ENTSOEClient.
+    # The counters still come from the real initialiser (ABL-61) -- a hand-built
+    # `{"total_records": 0}` went stale the moment the pass gained a second
+    # counter, and failed here as a KeyError rather than as anything about
+    # log_id.
     p = object.__new__(pipeline.ENTSOEPipeline)
     p.client = object()
-    p.stats = {"total_records": 0}
+    p.stats = pipeline.ENTSOEPipeline.initial_stats()
 
     start = datetime(2026, 9, 1, tzinfo=pytz.UTC)
     end = datetime(2026, 9, 2, tzinfo=pytz.UTC)
