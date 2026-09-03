@@ -1,8 +1,20 @@
 # Energy data updates (4x daily)
-30 0 * * * cd /app && /usr/local/bin/python3 scripts/update.py >> /app/logs/cron_update.log 2>&1
-30 6 * * * cd /app && /usr/local/bin/python3 scripts/update.py >> /app/logs/cron_update.log 2>&1
-30 13 * * * cd /app && /usr/local/bin/python3 scripts/update.py >> /app/logs/cron_update.log 2>&1
-30 18 * * * cd /app && /usr/local/bin/python3 scripts/update.py >> /app/logs/cron_update.log 2>&1
+#
+# Called through scripts/run_update_pass.sh rather than update.py directly
+# (ABL-61). `>> log 2>&1` discards the exit code, so update.py exiting 2 on a
+# total outage or 3 on a volume collapse would be invisible; the wrapper turns
+# it into a greppable INGEST-PASS-FAILED line in cron_update.log AND a line on
+# the container's stdout, which `docker logs` showed as completely empty
+# throughout the four-day ABL-630 collapse.
+#
+# A pass that stores nothing re-runs itself after 5 and then 15 minutes
+# (config.PASS_RETRY_DELAYS_SECONDS), so a pass can now occupy up to ~3h of the
+# 5-6h gap to the next one. That is deliberate and bounded; a collapsed pass
+# does NOT retry (see src/pass_verdict.py for why).
+30 0 * * * /bin/sh /app/scripts/run_update_pass.sh
+30 6 * * * /bin/sh /app/scripts/run_update_pass.sh
+30 13 * * * /bin/sh /app/scripts/run_update_pass.sh
+30 18 * * * /bin/sh /app/scripts/run_update_pass.sh
 
 # Day-ahead PRICE only, right after the SDAC market-coupling publication.
 # The auction publishes the whole of the next market day at ~12:45 Brussels
@@ -24,8 +36,14 @@
 # net_position) have the same exposure and are deliberately NOT here yet —
 # adding them is a one-word change, pending a call on the extra runtime.
 # See ABL-54 / ABL-51.
-15 11 * * * cd /app && /usr/local/bin/python3 scripts/update.py --types price --days 2 >> /app/logs/cron_update.log 2>&1
-15 12 * * * cd /app && /usr/local/bin/python3 scripts/update.py --types price --days 2 >> /app/logs/cron_update.log 2>&1
+#
+# `--no-pass-retry`: the 12:15 line already IS the retry for the 11:15 one, an
+# hour apart rather than five minutes, and a price-only pass is not comparable
+# with a full pass so it is neither volume-checked nor recorded as a baseline.
+# It still exits 2 if it stored nothing at all, which is what the wrapper
+# reports.
+15 11 * * * /bin/sh /app/scripts/run_update_pass.sh --types price --days 2 --no-pass-retry
+15 12 * * * /bin/sh /app/scripts/run_update_pass.sh --types price --days 2 --no-pass-retry
 
 # Weather data + forecasts (daily at 15:00 UTC) — legacy `weather_data` table
 0 15 * * * cd /app && /usr/local/bin/python3 scripts/update_weather.py --forecast >> /app/logs/cron_weather.log 2>&1

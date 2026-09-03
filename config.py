@@ -25,9 +25,28 @@ ENTSOE_API_KEY = os.getenv("api_key_entsoe")
 REQUESTS_PER_MINUTE = 300  # Conservative limit (ENTSO-E allows ~400/min)
 REQUEST_DELAY_SECONDS = 60 / REQUESTS_PER_MINUTE  # ~0.2 seconds between requests
 
-# Retry Configuration
+# Retry Configuration -- PER REQUEST, and narrower than it looks.
+#
+# MAX_RETRIES is tenacity's stop_after_attempt in ENTSOEClient._make_request
+# (src/entsoe_client.py:255-259), whose `retry_if_exception_type` covers
+# ConnectionError and TimeoutError ONLY -- and those are the *builtins*, since
+# entsoe_client.py imports nothing from `requests.exceptions`. `requests` raises
+# neither: `requests.exceptions.ConnectionError` descends from OSError but not
+# from the builtin ConnectionError, and `Timeout` likewise misses TimeoutError.
+# So MAX_RETRIES retries almost nothing an HTTP client can produce, and the 484
+# HTTP 503s of 2026-08-06 13:30 UTC (HTTPError, plainly neither) were retried
+# exactly zero times. Widening that filter is a separate change to the fetch
+# path -- ABL-61 does not make it.
+#
+# RETRY_BACKOFF_SECONDS is read by nothing (`grep -rn RETRY_BACKOFF_SECONDS`
+# returns this line, PIPELINE.md and nothing else) -- the waits actually used
+# are tenacity's wait_exponential(min=1, max=10). Tuning it changes nothing;
+# it is kept only because PIPELINE.md documents it.
+#
+# Neither knob addresses a multi-minute upstream outage: three attempts seconds
+# apart all land inside it. That is what PASS_RETRY_DELAYS_SECONDS below is for.
 MAX_RETRIES = 3
-RETRY_BACKOFF_SECONDS = [1, 2, 4]  # Exponential backoff: 1s, 2s, 4s
+RETRY_BACKOFF_SECONDS = [1, 2, 4]  # unreferenced; see above
 
 # ============================================================================
 # ENTSO-E API ENDPOINT CONFIGURATION
@@ -209,6 +228,35 @@ BACKFILL_DEFAULTS = {
 # For regular updates, fetch data from this many days ago
 # This ensures we capture delayed uploads and data revisions
 UPDATE_DAYS_BACK = 7
+
+# ============================================================================
+# PASS SUPERVISION (ABL-61)
+# ============================================================================
+# scripts/update.py used to exit 0 on a total upstream outage. These are the
+# numbers behind the verdict in src/pass_verdict.py; the rules are there.
+
+# Whole-pass retry, applied only when a multi-country pass stored NOTHING.
+# Minutes, not seconds: the failure to survive is an upstream outage lasting
+# minutes (2026-08-06: 484 HTTP 503s), which a 1/2/4-second per-request backoff
+# sits entirely inside. Two retries, so a full pass plus its retries stays well
+# under the 6-hour gap to the next scheduled pass even at the 55-minute end of
+# the pass-duration range.
+PASS_RETRY_DELAYS_SECONDS = [300, 900]  # 5 min, then 15 min
+
+# How many recent healthy full passes form the volume baseline. 12 = three days
+# at four passes a day -- long enough that one quiet pass cannot move the median,
+# short enough to follow a real change in what we fetch.
+PASS_BASELINE_PASSES = 12
+
+# Refuse to judge volume on less history than this. A freshly deployed container
+# has no pass rows and must not alarm on its first pass.
+PASS_MIN_BASELINE_PASSES = 4
+
+# Stored under this fraction of the baseline = collapsed. ABL-630 fell to ~2% of
+# normal for four days; the moderate days on either side of it (75%, 45%) are
+# deliberately NOT alarms -- a pass that stores three quarters of normal is a
+# quiet day upstream, and an alarm that fires on those gets muted.
+PASS_COLLAPSE_FRACTION = 0.25
 
 # ============================================================================
 # COUNTRY CONFIGURATION

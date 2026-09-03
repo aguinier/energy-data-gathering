@@ -142,13 +142,26 @@ ENTSOE_API_CONFIG = {
 REQUESTS_PER_MINUTE = 300  # Conservative (ENTSO-E allows ~400)
 REQUEST_DELAY_SECONDS = 0.2
 
-# Retry Configuration
+# Retry Configuration (per request; see the caveat below)
 MAX_RETRIES = 3
 RETRY_BACKOFF_SECONDS = [1, 2, 4]
 
 # Update Configuration
 UPDATE_DAYS_BACK = 7  # Fetch last 7 days for updates
+
+# Whole-pass supervision (ABL-61)
+PASS_RETRY_DELAYS_SECONDS = [300, 900]  # re-run a pass that stored nothing
+PASS_BASELINE_PASSES = 12               # healthy passes forming the volume baseline
+PASS_MIN_BASELINE_PASSES = 4            # refuse to judge volume on less history
+PASS_COLLAPSE_FRACTION = 0.25           # under a quarter of baseline = collapsed
 ```
+
+**`RETRY_BACKOFF_SECONDS` is read by nothing** and `MAX_RETRIES` retries less
+than it looks like it does — the tenacity filter in
+`ENTSOEClient._make_request` names the *builtin* `ConnectionError`/
+`TimeoutError`, which `requests` never raises. Neither knob can survive a
+multi-minute upstream outage; `PASS_RETRY_DELAYS_SECONDS` is the one that
+re-runs the whole pass. See the comment on those constants in `config.py`.
 
 **Functions:**
 - `get_api_config(data_type)` - Get configuration for specific data type
@@ -479,6 +492,25 @@ python scripts/update.py \
 - `--types`: Data types to update (default: all)
 - `--countries`: Countries to update (default: all)
 - `--log-level`: Logging level
+- `--no-pass-retry`: exit immediately on an empty pass instead of re-running it
+
+**Exit codes (ABL-61):** `0` healthy, `1` config error or the pipeline raised,
+`2` the pass stored nothing at all, `3` the pass stored under
+`PASS_COLLAPSE_FRACTION` of its own recent baseline. A `2` re-runs the whole
+pass on `PASS_RETRY_DELAYS_SECONDS` before giving up; a `3` never retries — it
+already ran its full 17-55 minutes, and the one collapse on record (ABL-630)
+lasted four days, so re-running only adds load to a degraded upstream. Only a
+full pass — all types, all countries, `UPDATE_DAYS_BACK` — is volume-checked or
+recorded as a baseline.
+
+**`scripts/run_update_pass.sh`**
+
+The wrapper cron actually calls (ABL-61). Runs `update.py`, appends its output
+to `logs/cron_update.log` as before, and on a non-zero exit writes one
+`INGEST-PASS-FAILED rc=<n>` line to both that log and the container's stdout —
+`docker logs energy-data-gathering` was empty for the whole four-day ABL-630
+window. Passes its arguments through and exits with `update.py`'s code.
+Honours `APP_DIR`, `ENERGY_LOGS_DIR` and `PYTHON`.
 
 **`scripts/scheduler_setup.sh`**
 
@@ -876,7 +908,7 @@ REQUEST_DELAY_SECONDS = 0.2
 
 # Retry Configuration
 MAX_RETRIES = 3
-RETRY_BACKOFF_SECONDS = [1, 2, 4]
+RETRY_BACKOFF_SECONDS = [1, 2, 4]  # NOT a tunable -- nothing reads it
 
 # Update Settings
 UPDATE_DAYS_BACK = 7  # Increase to 14 for more conservative updates
@@ -991,12 +1023,21 @@ bash scripts/scheduler_setup.sh
 
 **Verify Cron:**
 ```bash
-crontab -l | grep update.py
+crontab -l | grep update.py                        # host cron, via scheduler_setup.sh
+grep run_update_pass docker/crontab                # the container's schedule
 ```
+
+The two schedules are not the same file. **`docker/crontab` is what production
+runs**, and since ABL-61 its update lines call `scripts/run_update_pass.sh`
+rather than `update.py` directly — `>> log 2>&1` discards the exit code, and the
+wrapper is what surfaces it. `scheduler_setup.sh` still installs a bare
+`update.py` line into the host crontab, so a host install gets the new exit
+codes but not the `INGEST-PASS-FAILED` line.
 
 **Monitor Cron Logs:**
 ```bash
 tail -f logs/cron_update.log
+grep INGEST-PASS-FAILED logs/cron_update.log   # a pass that exited non-zero
 ```
 
 ### Resuming Failed Backfill
