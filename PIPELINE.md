@@ -142,9 +142,12 @@ ENTSOE_API_CONFIG = {
 REQUESTS_PER_MINUTE = 300  # Conservative (ENTSO-E allows ~400)
 REQUEST_DELAY_SECONDS = 0.2
 
-# Retry Configuration (per request; see the caveat below)
+# Retry Configuration (per request; ABL-665)
 MAX_RETRIES = 3
-RETRY_BACKOFF_SECONDS = [1, 2, 4]
+RETRY_WAIT_MIN_SECONDS = 1
+RETRY_WAIT_MAX_SECONDS = 10
+ENTSOE_LIB_RETRY_COUNT = 1          # collapses entsoe-py's own retry layer
+ENTSOE_LIB_RETRY_DELAY_SECONDS = 0
 
 # Update Configuration
 UPDATE_DAYS_BACK = 7  # Fetch last 7 days for updates
@@ -156,12 +159,25 @@ PASS_MIN_BASELINE_PASSES = 4            # refuse to judge volume on less history
 PASS_COLLAPSE_FRACTION = 0.25           # under a quarter of baseline = collapsed
 ```
 
-**`RETRY_BACKOFF_SECONDS` is read by nothing** and `MAX_RETRIES` retries less
-than it looks like it does — the tenacity filter in
-`ENTSOEClient._make_request` names the *builtin* `ConnectionError`/
-`TimeoutError`, which `requests` never raises. Neither knob can survive a
-multi-minute upstream outage; `PASS_RETRY_DELAYS_SECONDS` is the one that
-re-runs the whole pass. See the comment on those constants in `config.py`.
+**All four retry constants are read** (ABL-665 — before it, `MAX_RETRIES`
+retried almost nothing and `RETRY_BACKOFF_SECONDS` was read by nothing at all,
+so it is gone). `MAX_RETRIES` and the two `RETRY_WAIT_*` values drive the single
+tenacity layer on `ENTSOEClient._make_request`; `ENTSOE_LIB_RETRY_COUNT`
+collapses entsoe-py's own `@retry` on `_base_request` so the two do not
+multiply.
+
+**The bound.** ~722 `_make_request` calls per full pass (7 types × 39 countries
+× 2 calls, plus 176 crossborder legs). Under a total outage each is attempted
+`MAX_RETRIES` times with waits of 1s + 2s → ~36 min of added wait, ~46 min with
+the extra round trips and the rate limiter; ×3 ABL-61 pass runs ≈ 2.6h, inside
+the 5-6h cron gap. `test_the_added_wait_per_pass_stays_inside_the_cron_gap`
+pins it, so raising `MAX_RETRIES` fails a test rather than silently eating the
+gap. Leaving entsoe-py at its default `retry_count=3`/`retry_delay=10` instead
+costs 30s of sleeping per failed request — 722 × 30s ≈ 6.0h in a single pass.
+
+None of these can survive a multi-minute upstream outage;
+`PASS_RETRY_DELAYS_SECONDS` is the one that re-runs the whole pass. See the
+comment on those constants in `config.py`.
 
 **Functions:**
 - `get_api_config(data_type)` - Get configuration for specific data type
@@ -221,21 +237,36 @@ ProgressTracker(total, description) - Simple progress tracker
            time.sleep(self.request_delay - elapsed)
    ```
 
-2. **Retry Logic:**
+2. **Retry Logic** (ABL-665):
    ```python
    @retry(
-       stop=stop_after_attempt(3),
-       wait=wait_exponential(multiplier=1, min=1, max=10),
-       retry=retry_if_exception_type((ConnectionError, TimeoutError))
+       stop=stop_after_attempt(config.MAX_RETRIES),
+       wait=wait_exponential(multiplier=1,
+                             min=config.RETRY_WAIT_MIN_SECONDS,
+                             max=config.RETRY_WAIT_MAX_SECONDS),
+       retry=retry_if_exception_type(ENTSOETransientError),
+       reraise=True
    )
    def _make_request(self, method, *args, **kwargs):
        # Rate limit, then make request
    ```
 
+   The filter names **our** wrapper type, not `requests.exceptions.*`, and that
+   is load-bearing: the body of `_make_request` catches `Exception` and
+   re-raises, so the transport exception never reaches the decorator. Widening
+   the tuple to the `requests` types would still retry nothing. Classification
+   happens at the raise site, via the pure `is_transient_upstream_error`.
+
 3. **Error Handling:**
-   - `NoMatchingDataError` → `ENTSOENoDataError` (graceful skip)
-   - `InvalidPSRTypeError` → Logged and raised
-   - `ConnectionError` → Retried with backoff
+   - `NoMatchingDataError` → `ENTSOENoDataError` (graceful skip, **not** retried
+     — "no data" is an answer, not a failure)
+   - `InvalidPSRTypeError` / `PaginationError` → `ENTSOEClientError`, not retried
+   - Connection failure, timeout, `gaierror`, `RemoteDisconnected`, and
+     `HTTPError` with **429 or 5xx** → `ENTSOETransientError`, retried with
+     exponential backoff, then surfaced
+   - `HTTPError` with any **4xx** → `ENTSOEClientError`, one attempt. A bad
+     request does not become good, and a 401 must not spend the budget
+     re-presenting a credential that will stay wrong.
 
 **Key Methods:**
 
@@ -906,9 +937,11 @@ DATABASE_PATH = BASE_DIR / "energy_dashboard.db"
 REQUESTS_PER_MINUTE = 300  # Increase up to 400 if stable
 REQUEST_DELAY_SECONDS = 0.2
 
-# Retry Configuration
+# Retry Configuration -- all read; raising MAX_RETRIES fails the pass-duration
+# test that pins ABL-665's bound, so redo that arithmetic first
 MAX_RETRIES = 3
-RETRY_BACKOFF_SECONDS = [1, 2, 4]  # NOT a tunable -- nothing reads it
+RETRY_WAIT_MIN_SECONDS = 1
+RETRY_WAIT_MAX_SECONDS = 10
 
 # Update Settings
 UPDATE_DAYS_BACK = 7  # Increase to 14 for more conservative updates

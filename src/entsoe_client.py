@@ -11,9 +11,12 @@ Wraps the entsoe-py library with:
 import time
 import logging
 from datetime import datetime
+from http.client import RemoteDisconnected
+from socket import gaierror
 from typing import Dict, List, Optional, Tuple
 import pandas as pd
 import pytz
+import requests
 import xml.etree.ElementTree as ET
 from entsoe import EntsoePandasClient, EntsoeRawClient
 from entsoe.exceptions import NoMatchingDataError, InvalidPSRTypeError, PaginationError
@@ -203,6 +206,62 @@ class ENTSOENoDataError(ENTSOEClientError):
     pass
 
 
+class ENTSOETransientError(ENTSOEClientError):
+    """A request failed in a way that is worth attempting again.
+
+    This is the ONLY exception tenacity retries on `_make_request`, and it
+    exists because that method wraps every failure before tenacity can see it:
+    the body's `except Exception` re-raises `ENTSOEClientError`, so a filter
+    naming transport types -- `requests.exceptions.ConnectionError`, say --
+    would match nothing no matter how it is spelled. That, not just the builtin
+    /`requests` mix-up, is why the 484 HTTP 503s of 2026-08-06 13:30 UTC were
+    retried exactly zero times: measured on the pre-ABL-665 code, both a 503 and
+    a `requests.ConnectionError` got 1 attempt.
+
+    Subclasses ENTSOEClientError so every existing `except ENTSOEClientError`
+    caller keeps catching it once the attempts are spent.
+    """
+    pass
+
+
+# HTTP statuses worth a second attempt: 429 is "slow down", 5xx is "our fault".
+# A 4xx is a bad request -- retrying it changes nothing and, for 401, spends the
+# budget re-presenting a credential that will stay wrong.
+RETRYABLE_HTTP_STATUSES = frozenset({429})
+
+# Transport-level failures. `requests.exceptions.ConnectionError` covers DNS and
+# refused/reset connections; `gaierror` and `RemoteDisconnected` are listed
+# because entsoe-py's own decorator caught them raw, and collapsing that layer
+# (config.ENTSOE_LIB_RETRY_COUNT) must not lose a case it used to handle.
+TRANSIENT_TRANSPORT_ERRORS = (
+    requests.exceptions.ConnectionError,
+    requests.exceptions.Timeout,
+    gaierror,
+    RemoteDisconnected,
+)
+
+
+def is_transient_upstream_error(exc: BaseException) -> bool:
+    """True if `exc` is worth another attempt against ENTSO-E.
+
+    Pure, so the retry policy is assertable without a network call or a clock.
+
+    Deliberately an allow-list of concrete types rather than
+    `requests.RequestException`: `MissingSchema`, `InvalidURL` and friends are
+    RequestExceptions too, and retrying a malformed request is pure waste.
+    """
+    if isinstance(exc, requests.exceptions.HTTPError):
+        response = getattr(exc, 'response', None)
+        status = getattr(response, 'status_code', None)
+        if status is None:
+            # No status to judge by -- treat as permanent. Guessing "retry"
+            # here is how a 4xx sneaks into the retry budget.
+            return False
+        return status in RETRYABLE_HTTP_STATUSES or 500 <= status <= 599
+
+    return isinstance(exc, TRANSIENT_TRANSPORT_ERRORS)
+
+
 # ============================================================================
 # ENTSO-E CLIENT
 # ============================================================================
@@ -233,9 +292,24 @@ class ENTSOEClient:
         log_redaction.register_secret_value(self.api_key)
         log_redaction.install_secret_redaction()
 
-        # Initialize entsoe-py clients
-        self.client = EntsoePandasClient(api_key=self.api_key)
-        self.raw_client = EntsoeRawClient(api_key=self.api_key)
+        # Initialize entsoe-py clients.
+        #
+        # retry_count/retry_delay are passed explicitly to collapse entsoe-py's
+        # OWN @retry decorator on EntsoeRawClient._base_request to a single
+        # attempt. Its defaults (3 attempts, fixed 10s sleep) are a second,
+        # invisible retry layer that nests under ours and does not cover 5xx.
+        # `_make_request` below is the one place retrying happens now. See the
+        # arithmetic on config.ENTSOE_LIB_RETRY_COUNT (ABL-665).
+        self.client = EntsoePandasClient(
+            api_key=self.api_key,
+            retry_count=config.ENTSOE_LIB_RETRY_COUNT,
+            retry_delay=config.ENTSOE_LIB_RETRY_DELAY_SECONDS,
+        )
+        self.raw_client = EntsoeRawClient(
+            api_key=self.api_key,
+            retry_count=config.ENTSOE_LIB_RETRY_COUNT,
+            retry_delay=config.ENTSOE_LIB_RETRY_DELAY_SECONDS,
+        )
 
         # Rate limiting
         self.last_request_time = 0
@@ -254,8 +328,15 @@ class ENTSOEClient:
 
     @retry(
         stop=stop_after_attempt(config.MAX_RETRIES),
-        wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type((ConnectionError, TimeoutError)),
+        wait=wait_exponential(
+            multiplier=1,
+            min=config.RETRY_WAIT_MIN_SECONDS,
+            max=config.RETRY_WAIT_MAX_SECONDS,
+        ),
+        # Must name a type this function actually lets escape. The body wraps
+        # everything, so the transport exception never reaches here -- the
+        # classification happens at the raise site below. (ABL-665)
+        retry=retry_if_exception_type(ENTSOETransientError),
         reraise=True
     )
     def _make_request(self, method, *args, **kwargs):
@@ -299,8 +380,20 @@ class ENTSOEClient:
             logger.error(f"Pagination error: {e}")
             raise ENTSOEClientError(f"Pagination error: {e}") from e
 
+        # The catch-all is what made the retry decorator inert before ABL-665:
+        # it turns every failure into a plain ENTSOEClientError, so a filter
+        # naming transport types matched nothing however it was spelled. The
+        # classification therefore has to happen HERE, at the raise site, and
+        # the wrapper type is what tenacity keys on.
+        #
+        # The three clauses above stay above this one on purpose: entsoe-py
+        # raises NoMatchingDataError for the 4xx that means "no rows", and "no
+        # data" is an answer, not a failure worth another attempt.
         except Exception as e:
             log_redaction.redact_exception(e)
+            if is_transient_upstream_error(e):
+                logger.warning(f"Transient upstream failure: {utils.format_error(e)}")
+                raise ENTSOETransientError(f"API request failed: {e}") from e
             logger.error(f"API request failed: {utils.format_error(e)}")
             raise ENTSOEClientError(f"API request failed: {e}") from e
 

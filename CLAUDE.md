@@ -168,10 +168,21 @@ container's stdout. Grep the schedule for `run_update_pass`, not `update.py`.
 `update.py`'s exit codes: `0` healthy, `1` config error or the pipeline raised,
 `2` the pass stored nothing anywhere, `3` volume collapse against its own recent
 baseline. A `2` re-runs the **whole pass** first
-(`config.PASS_RETRY_DELAYS_SECONDS`, 5 then 15 minutes) — `MAX_RETRIES` /
-`RETRY_BACKOFF_SECONDS` are per-request and cannot survive a multi-minute
-outage; a `3` never retries. Only a full pass (all types, all countries,
-`UPDATE_DAYS_BACK`) is volume-checked or recorded as a baseline.
+(`config.PASS_RETRY_DELAYS_SECONDS`, 5 then 15 minutes) — `MAX_RETRIES` is
+per-request and cannot survive a multi-minute outage; a `3` never retries. Only
+a full pass (all types, all countries, `UPDATE_DAYS_BACK`) is volume-checked or
+recorded as a baseline.
+
+**Per-request retry lives in exactly one place** (ABL-665):
+`ENTSOEClient._make_request`'s tenacity decorator, retrying `ENTSOETransientError`
+— connection failures, timeouts and HTTP 429/5xx, per the pure
+`is_transient_upstream_error`. It must key on *our* wrapper type: the method body
+catches `Exception` and re-wraps, so a filter naming `requests.exceptions.*`
+matches nothing. That is why the pre-ABL-665 filter (the *builtin*
+`ConnectionError`/`TimeoutError`) retried the 484 HTTP 503s of 2026-08-06 zero
+times. A 4xx and `NoMatchingDataError` are never retried. entsoe-py has a second
+`@retry` of its own on `_base_request`; we pass `retry_count=1` to collapse it,
+so attempts do not multiply — do not restore its default.
 
 ## Rules that bite
 
