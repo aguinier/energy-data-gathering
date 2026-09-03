@@ -25,28 +25,48 @@ ENTSOE_API_KEY = os.getenv("api_key_entsoe")
 REQUESTS_PER_MINUTE = 300  # Conservative limit (ENTSO-E allows ~400/min)
 REQUEST_DELAY_SECONDS = 60 / REQUESTS_PER_MINUTE  # ~0.2 seconds between requests
 
-# Retry Configuration -- PER REQUEST, and narrower than it looks.
+# Retry Configuration -- PER REQUEST. Every value here is read; see ABL-665.
 #
-# MAX_RETRIES is tenacity's stop_after_attempt in ENTSOEClient._make_request
-# (src/entsoe_client.py:255-259), whose `retry_if_exception_type` covers
-# ConnectionError and TimeoutError ONLY -- and those are the *builtins*, since
-# entsoe_client.py imports nothing from `requests.exceptions`. `requests` raises
-# neither: `requests.exceptions.ConnectionError` descends from OSError but not
-# from the builtin ConnectionError, and `Timeout` likewise misses TimeoutError.
-# So MAX_RETRIES retries almost nothing an HTTP client can produce, and the 484
-# HTTP 503s of 2026-08-06 13:30 UTC (HTTPError, plainly neither) were retried
-# exactly zero times. Widening that filter is a separate change to the fetch
-# path -- ABL-61 does not make it.
+# These three drive the one and only retry layer on the ENTSO-E fetch path,
+# tenacity's decorator on ENTSOEClient._make_request (src/entsoe_client.py).
+# MAX_RETRIES is stop_after_attempt; the two WAIT values are
+# wait_exponential(multiplier=1, min=..., max=...). Changing any of them
+# changes behaviour -- which was not true before ABL-665, when the filter named
+# the *builtin* ConnectionError/TimeoutError (requests raises neither) and
+# RETRY_BACKOFF_SECONDS was read by nothing at all.
 #
-# RETRY_BACKOFF_SECONDS is read by nothing (`grep -rn RETRY_BACKOFF_SECONDS`
-# returns this line, PIPELINE.md and nothing else) -- the waits actually used
-# are tenacity's wait_exponential(min=1, max=10). Tuning it changes nothing;
-# it is kept only because PIPELINE.md documents it.
+# What is retried is decided by entsoe_client.is_transient_upstream_error():
+# connection failures, timeouts, and HTTP 429/5xx. A 4xx is a bad request and
+# is never retried; "no matching data" is an answer, not a failure.
 #
-# Neither knob addresses a multi-minute upstream outage: three attempts seconds
-# apart all land inside it. That is what PASS_RETRY_DELAYS_SECONDS below is for.
+# Attempts and waits are bounded so that a TOTAL upstream outage cannot eat the
+# cron gap. Worst case, measured in ABL-665: ~722 requests per full pass x
+# (MAX_RETRIES - 1) waits of at most RETRY_WAIT_MAX_SECONDS is the ceiling, and
+# the realised exponential waits (1s + 2s) put it near 36 min of added wait per
+# pass -- ~46 min including the extra round trips and the rate limiter. Three
+# ABL-61 pass runs stay under ~2.6h, inside the 5-6h gap. Raise MAX_RETRIES and
+# you must redo that arithmetic.
 MAX_RETRIES = 3
-RETRY_BACKOFF_SECONDS = [1, 2, 4]  # unreferenced; see above
+RETRY_WAIT_MIN_SECONDS = 1
+RETRY_WAIT_MAX_SECONDS = 10
+
+# entsoe-py's own @retry decorator wraps EntsoeRawClient._base_request and
+# retries requests.ConnectionError/gaierror/RemoteDisconnected on its own,
+# defaulting to retry_count=3 with a *fixed* retry_delay=10s. That layer is
+# invisible from here and nests underneath ours: left at its default it costs
+# 30s of sleeping per failed request (722 x 30s = ~6.0h in one pass, already
+# over the cron gap before ABL-665 added anything), and multiplies by
+# MAX_RETRIES once our filter covers the same exceptions.
+#
+# So we collapse it to a single attempt and do all retrying in one place, where
+# it is bounded, exponential, and covers 429/5xx as well. 1 is the minimum: at
+# 0 the library's `for _ in range(retry_count)` never runs and its `else`
+# branch raises None.
+ENTSOE_LIB_RETRY_COUNT = 1
+ENTSOE_LIB_RETRY_DELAY_SECONDS = 0
+
+# None of this addresses a multi-minute upstream outage: three attempts seconds
+# apart all land inside it. That is what PASS_RETRY_DELAYS_SECONDS below is for.
 
 # ============================================================================
 # ENTSO-E API ENDPOINT CONFIGURATION
