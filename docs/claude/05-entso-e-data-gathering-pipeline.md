@@ -226,10 +226,44 @@ full write-up in `reports/abl_442_revision_horizon.md`):
    `CURRENT_TIMESTAMP` inside an `INSERT OR REPLACE`, which deletes and re-inserts. So
    `fetched_at - timestamp_utc` is "how old was this instant when we last asked about
    it" — which is exactly the diagnostic, but is *not* a provenance record of first
-   capture.
+   capture. **CLAUDE.md and `11-database-schema.md` both said the opposite** — "use
+   `created_at`, which is write-once" — until ABL-664 corrected them; the paragraph
+   existed to steer readers off `publication_timestamp_utc` and handed out a second
+   wrong answer doing it.
 2. **`scripts/catchup.py` does not help here.** It is `energy_load`-only
    (`catchup.py:71`) and targets interior holes — instants we are *missing* — so it never
    re-fetches a row we already hold. A revision is a value change on a present row.
+
+**`created_at`'s rolling-window signature, measured twice (ABL-664).** If it were
+write-once, a target day's `created_at` would sit near that day. It does not — it advances
+with every pass that covers the day, then freezes when the day leaves `UPDATE_DAYS_BACK`.
+Prod, read-only, 2026-09-03 (from the ABL-653 pass measurement), and reproduced
+independently on the workstation replica on 2026-09-09, DE `energy_load`, `MIN..MAX` of
+`created_at` per target day, 96 rows each:
+
+```
+target day    created_at MIN .. MAX        (replica, 2026-09-09)
+2026-08-20    2026-08-26 18:37 .. 2026-08-27 18:40
+2026-08-27    2026-09-02 19:05 .. 2026-09-03 18:48
+2026-08-28    2026-09-03 18:48 .. 2026-09-04 18:40   <- not 08-28
+2026-09-03    2026-09-09 01:51 .. 2026-09-09 01:51   <- still inside the window
+```
+
+A day's span is at most two adjacent passes wide — the 7-day boundary falls mid-day, so
+some of its hours were still in the window on the later pass and some were not — and every
+day fully inside the trailing 7 carries the newest pass outright. That is a last-write
+timestamp by definition. Two consequences worth stating:
+
+- **It is not "last touched" either.** A column-level `UPDATE` changes a row without moving
+  it — `scripts/backfill_publication_timestamps.py:119` is the one in tree, and it is why a
+  GB 2021-03 block carries a `publication_timestamp_utc` 34 days *after* its `created_at`
+  (`11-database-schema.md`).
+- **No column records first-store time.** `created_at` = last row write;
+  `publication_timestamp_utc` = when we fetched. This lands on ABL-442's proposed settle
+  pass and one-time reconciliation, which are about *which vintage a row holds*: anyone
+  reasoning about that from `created_at` will date a row's first capture days late. If
+  first-store time is genuinely needed it is a new column, i.e. a schema change and a Board
+  matter — not a doc fix and not something to infer.
 
 **No behaviour has been changed.** A weekly settle pass over a trailing 42 days
 (`+1.3%` requests, `+11%` writes) is proposed on ABL-442 and awaits a CEO decision, as

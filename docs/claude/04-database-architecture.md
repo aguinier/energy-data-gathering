@@ -21,4 +21,5 @@ All fact tables follow consistent patterns:
 - Timestamps stored in UTC (`timestamp_utc` column)
 - Composite indexes on `(country_code, timestamp_utc)` prevent duplicates
 - `data_quality` field distinguishes actual vs forecast data
-- `created_at` timestamp for record creation tracking
+- `created_at` timestamps the **last** row-replacing write, not the first (`INSERT OR REPLACE`
+  re-stamps it on every re-fetch — ABL-664, `docs/claude/11-database-schema.md`)
