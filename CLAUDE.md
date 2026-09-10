@@ -241,7 +241,22 @@ with that moment (`src/entsoe_client.py`), and `INSERT OR REPLACE` overwrites th
 column on every re-fetch — so one GB block from 2021 carries four different
 values, and a backfilled row is stamped with the backfill date. **Do not use it
 for publication delay, freshness, or revision tracking, and never backfill it.**
-For "when did we first store this row", use `created_at`, which is write-once.
+
+**`created_at` is not write-once either — it dates the last write, and no column
+records first-store time (ABL-664).** Every upsert is `INSERT OR REPLACE …
+created_at) VALUES (…, CURRENT_TIMESTAMP)` (`src/db.py:398`, same shape for every
+table), and SQLite's REPLACE *deletes the conflicting row and inserts a new one*
+rather than updating in place — so a re-fetch re-stamps it. A target day's
+`created_at` therefore advances with every pass while the day is inside
+`UPDATE_DAYS_BACK`, and freezes at whatever the last covering pass stamped once it
+slides out. It is not a reliable "last touched" stamp either: a column-level
+`UPDATE` changes a row without moving it (`scripts/backfill_publication_timestamps.py:119`
+is the only such writer in tree), so a 2021 GB block carries a
+`publication_timestamp_utc` 34 days *after* its `created_at` — the two columns can
+disagree in either direction. **Nothing here can answer "when did we first store this
+row"**; adding a column that could is a schema change, so a Board matter. For what
+a pass actually did, read `data_ingestion_log`. Measurements:
+`docs/claude/05-entso-e-data-gathering-pipeline.md`.
 
 **The 7-day update window is shorter than the ~28-day revision horizon
 (ABL-442).** `UPDATE_DAYS_BACK = 7` (`config.py:211`), but ENTSO-E keeps revising

@@ -91,8 +91,17 @@ when our cron last fetched the row. Two concrete measurements (replica, 2026-08-
   publication. The column cannot measure publication delay even where a real publication time exists.
 
 **It is overwritten on every re-fetch.** A single GB 2021-03 block of 1,486 rows carries 4 distinct
-`publication_timestamp_utc` values, drifting up to 34 days past their `created_at`. If you want
-"when did we first store this row", use `created_at` — that is write-once.
+`publication_timestamp_utc` values, drifting up to 34 days past their `created_at`. Re-measured on
+the replica 2026-09-09: the four values (48/335/672/431 rows) all sit on rows whose `created_at` is
+a single `2025-11-25 10:18:18`. So the block was last *row*-written on 2025-11-25 and its
+publication stamp moved a month later without it — the signature of a column-level `UPDATE`, of
+which `scripts/backfill_publication_timestamps.py:119` is the only one in tree. Which run did it was
+not established.
+
+**`created_at` does not answer "when did we first store this row" either (ABL-664).** It records the
+last row-replacing write: the upserts set it to `CURRENT_TIMESTAMP` inside an `INSERT OR REPLACE`
+(`src/db.py:398`), which deletes and re-inserts, so a re-fetch re-stamps it. **No column in this
+schema records first-store time.** See `docs/claude/05-entso-e-data-gathering-pipeline.md`.
 
 **Do not use this column for:**
 - Analyzing publication delays (it records fetch time, not publication time)
