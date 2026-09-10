@@ -30,3 +30,7 @@ nul
 
 # Superpowers SDD scratch (ledger, briefs, reports)
 .superpowers/
+
+# junit report written by the CI test step (ABL-647), and by anyone running
+# that same command locally to reproduce a CI count
+report.xml
