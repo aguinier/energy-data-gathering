@@ -77,8 +77,14 @@ jobs:
       # memory (tests/conftest.py) or asserts against a stored document, so the
       # shared SQLite file is never opened. If a test ever does reach for it,
       # this job is where that shows up.
+      #
+      # `-rs` because the gate's skip allowance is a number, and a number is
+      # not evidence. Under bare `-q` a skip is a character in a progress bar,
+      # so the one question the allowance raises — WHICH test is gated, and on
+      # what — has no answer in the log. This prints the reason for every skip,
+      # every run.
       - name: test
-        run: python -m pytest -q tests/ --junitxml=report.xml
+        run: python -m pytest -q -rs tests/ --junitxml=report.xml
 
       # `if: !cancelled()` so a failing suite still reports its counts — a run
       # that went red is exactly when you need to know whether it also ran
