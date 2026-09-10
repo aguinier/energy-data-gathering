@@ -40,8 +40,8 @@ from pathlib import Path
 # `None` means "not yet measured": the gate then reports what it saw and fails,
 # so a floor cannot be quietly left unset.
 FLOOR: dict[str, int | None] = {
-    "tests": None,
-    "max_skipped": None,
+    "tests": 428,
+    "max_skipped": 1,
 }
 
 
