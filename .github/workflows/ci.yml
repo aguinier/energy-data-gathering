@@ -1,0 +1,97 @@
+# ABL-647. Until this existed, `statusCheckRollup` was empty on every PR in this
+# repo, so GitHub's MERGEABLE / CLEAN meant "applies without conflict" and
+# nothing more. Verifying a PR meant a human running the suite by hand, which is
+# why merging was expensive, which is why verified work stranded on the remote.
+#
+# This repo is the only writer of the shared database, so a regression here is
+# not a display bug — it lands in rows that everything downstream reads as fact.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  # Pinned, not inherited. The container this code runs in sets no TZ
+  # (docker/Dockerfile is `python:3.11-slim`), so it is UTC; the workstation
+  # sits in Europe/Brussels. Several things here are timezone-shaped — the
+  # ENTSO-E client's local-time window construction, the crontab assertions,
+  # the day-ahead pass boundaries — and a suite that only ever runs in
+  # Europe/Brussels cannot tell a genuine instant from one that merely agrees
+  # with the local clock. Running CI in the deployment's zone is what makes
+  # that class visible here instead of in ingested rows.
+  TZ: UTC
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Default shallow checkout is fine here: unlike energy-forecast, no test
+      # in this repo grades a claim about git history, so there is no history
+      # for a depth-1 clone to hide.
+      - uses: actions/checkout@v4
+
+      # The Python minor is pinned in .python-version and read from there,
+      # never written twice. It tracks the ingest container's
+      # `python:3.11-slim` (docker/Dockerfile) — the interpreter that actually
+      # writes to the shared database. The workstation's miniconda is a
+      # different minor again, so without this pin the suite would be graded on
+      # an interpreter nothing runs.
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+          cache: pip
+
+      # requirements.txt is what the container installs, pytest included — it
+      # is a runtime dependency here on purpose (the Dockerfile ships tests/,
+      # because the container is the only place with the full dependency set).
+      # So CI installs exactly that file and nothing more: a separate dev-only
+      # requirements file would be a second dependency set to keep true.
+      #
+      # Note this resolves `entsoe-py>=0.7.8` fresh, exactly as a container
+      # build does — the pin is a floor, not a version (CLAUDE.md, Testing).
+      # That is deliberate: the suite is fixture-driven and asserts against
+      # stored documents, so a float here is a signal about the next container
+      # build rather than a source of flake.
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r requirements.txt
+
+      # Not piped: a pipe reports the pipe's exit status, and a failing suite
+      # then reads as green (measured while building the sibling repos' gates —
+      # `pytest -q | tail` exits 0 with a failing test).
+      #
+      # `tests/` is spelled out because this repo has no `pytest.ini` to pin
+      # `testpaths`. That makes the scope an argument rather than a setting,
+      # which is precisely the drop the floor gate below is watching for.
+      #
+      # No database exists on the runner. Every test builds its own schema in
+      # memory (tests/conftest.py) or asserts against a stored document, so the
+      # shared SQLite file is never opened. If a test ever does reach for it,
+      # this job is where that shows up.
+      #
+      # `-rs` because the gate's skip allowance is a number, and a number is
+      # not evidence. Under bare `-q` a skip is a character in a progress bar,
+      # so the one question the allowance raises — WHICH test is gated, and on
+      # what — has no answer in the log. This prints the reason for every skip,
+      # every run.
+      - name: test
+        run: python -m pytest -q -rs tests/ --junitxml=report.xml
+
+      # `if: !cancelled()` so a failing suite still reports its counts — a run
+      # that went red is exactly when you need to know whether it also ran
+      # short. The floor and the skip allowance are measured ON THIS RUNNER:
+      # the GEM end-to-end test is gated on xlsx files under `C:/Code/able/data`
+      # that exist on the workstation and not here, so the two environments
+      # legitimately run different numbers of tests.
+      - name: assert the test count did not drop
+        if: ${{ !cancelled() }}
+        run: python scripts/test_floor.py report.xml

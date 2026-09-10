@@ -368,6 +368,18 @@ changes no result today; but **a test written against the library's own parsing
 passes here and proves nothing about production.** Assert against a stored
 document, never against what entsoe-py does with it.
 
+**CI runs the suite on every PR** (`.github/workflows/ci.yml`, ABL-647), on the
+Python minor pinned in `.python-version` — never float it; it tracks the ingest
+container's `python:3.11-slim`, and the workstation's miniconda is a different
+minor again. `TZ` is pinned to `UTC` there, the container's zone, so a
+timezone-shaped test cannot pass merely by agreeing with the Europe/Brussels
+workstation clock. `scripts/test_floor.py` then fails a run that went green on
+fewer tests than the recorded floor, because pytest exits 0 having run nothing.
+Raise a floor in the commit that adds the tests; lowering one needs its reason in
+the message. One test self-skips in CI (the GEM end-to-end loader wants xlsx
+files under `C:/Code/able/data`) — that is the `max_skipped` allowance, and a
+second skip fails the build.
+
 Baselines rot, so the durable half is the delta: re-measure on the merged tree
 rather than trusting a count written here. Everything lives in `tests/`, one file
 per subject, and `tests/conftest.py` provides the in-memory SQLite fixtures.
