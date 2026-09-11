@@ -184,6 +184,12 @@ times. A 4xx and `NoMatchingDataError` are never retried. entsoe-py has a second
 `@retry` of its own on `_base_request`; we pass `retry_count=1` to collapse it,
 so attempts do not multiply — do not restore its default.
 
+**Every ENTSO-E request carries `config.ENTSOE_HTTP_TIMEOUT`** (ABL-668):
+entsoe-py defaults to none, so one silent socket could stall a pass forever.
+The read half is sized from measured request durations, and a timeout that
+fires on a slow success stores a gap nothing alarms on. Do not lower it without
+re-measuring (method and figures: the comment on it).
+
 ## Rules that bite
 
 **One upstream fetch per country per window.** `energy_renewable` and

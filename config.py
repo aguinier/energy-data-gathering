@@ -65,6 +65,36 @@ RETRY_WAIT_MAX_SECONDS = 10
 ENTSOE_LIB_RETRY_COUNT = 1
 ENTSOE_LIB_RETRY_DELAY_SECONDS = 0
 
+# HTTP timeout on every ENTSO-E request, as requests' (connect, read) pair
+# (ABL-668). entsoe-py defaults to timeout=None, and nothing above it measures
+# time, so a connection that stopped answering used to block the pass forever.
+#
+# READ bounds each wait for bytes -- the status line and every body read -- not
+# the request's total. It is the one that is dangerous to set low: firing on a
+# slow success turns a stored row into a gap that ingest monitoring cannot see,
+# which is worse than the hang. Measured from prod's cron_update.log
+# 2026-03-07..09-11, splitting each fetch at the document's createdDateTime:
+# the slowest single request in 137,361 fetches took 254s (6 over 180s, none
+# over 300s, most in the 2026-09 storm), and the slowest response of ANY kind
+# was a 346s HTTP 504. 600s clears the first by 2.4x -- room for a storm twice
+# as slow as 2026-09-09 -- and everything upstream has ever sent us. The stuck
+# connections on record ran ~16 min before the network reset them; this fires
+# well before that.
+#
+# CONNECT covers TCP + TLS to web-api.tp.entsoe.eu, measured at <=61ms from
+# the prod container. It can be tight because being wrong is cheap: a connect
+# timeout is retried like any transport failure and wastes no server work. 10s
+# still rides out three SYN retransmits (1+2+4s).
+#
+# A timeout is a transient failure (is_transient_upstream_error), so tenacity
+# retries it: one request whose every attempt stalls costs MAX_RETRIES x
+# (connect + read) plus the waits, ~31 min. That bound is per REQUEST. The
+# ABL-665 per-pass figure above assumes failures that return fast; nothing here
+# bounds a pass in which every request stalls.
+ENTSOE_CONNECT_TIMEOUT_SECONDS = 10
+ENTSOE_READ_TIMEOUT_SECONDS = 600
+ENTSOE_HTTP_TIMEOUT = (ENTSOE_CONNECT_TIMEOUT_SECONDS, ENTSOE_READ_TIMEOUT_SECONDS)
+
 # None of this addresses a multi-minute upstream outage: three attempts seconds
 # apart all land inside it. That is what PASS_RETRY_DELAYS_SECONDS below is for.
 
