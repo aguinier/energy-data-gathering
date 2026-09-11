@@ -300,15 +300,24 @@ class ENTSOEClient:
         # invisible retry layer that nests under ours and does not cover 5xx.
         # `_make_request` below is the one place retrying happens now. See the
         # arithmetic on config.ENTSOE_LIB_RETRY_COUNT (ABL-665).
+        #
+        # timeout is passed because entsoe-py's default is None, and
+        # session.get(..., timeout=None) waits forever on a connection that
+        # stops answering. It is set on the entsoe-py clients rather than in
+        # _make_request so that it also bounds the crossborder legs, which call
+        # self.client directly. Value and measurement: config.ENTSOE_HTTP_TIMEOUT
+        # (ABL-668).
         self.client = EntsoePandasClient(
             api_key=self.api_key,
             retry_count=config.ENTSOE_LIB_RETRY_COUNT,
             retry_delay=config.ENTSOE_LIB_RETRY_DELAY_SECONDS,
+            timeout=config.ENTSOE_HTTP_TIMEOUT,
         )
         self.raw_client = EntsoeRawClient(
             api_key=self.api_key,
             retry_count=config.ENTSOE_LIB_RETRY_COUNT,
             retry_delay=config.ENTSOE_LIB_RETRY_DELAY_SECONDS,
+            timeout=config.ENTSOE_HTTP_TIMEOUT,
         )
 
         # Rate limiting
