@@ -337,6 +337,13 @@ divergence this table was built to close.
 without escalating.** Those are cross-module contract changes with their own
 approvals.
 
+**Agent runs start with `APPDATA` and `LOCALAPPDATA` set to the empty string,
+while `USERPROFILE` is correct.** A path check rooted at
+`%APPDATA%`/`%LOCALAPPDATA%` silently resolves to a bare path and reads as
+"missing" rather than "unset". Derive any per-user path from `USERPROFILE`
+instead, and never conclude a per-user path or credential is absent from one
+of these probes.
+
 ## Data the pipeline cannot give you
 
 - **IS, MT and TR have no ENTSO-E data at all** and are skipped by design.
